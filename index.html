@@ -174,6 +174,15 @@ nav button.on{color:var(--brass)}
 .loan-item .t span{font-size:12px;color:var(--ink-dim)}
 .late{color:var(--clay)}
 
+.instore{margin-bottom:13px;background:var(--surface-2);color:var(--ink);border:1px solid var(--brass)}
+.volgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:5px;margin-bottom:12px}
+.vol{padding:7px 0;border-radius:6px;background:var(--surface-2);border:1px solid var(--line);font-size:12px;color:var(--ink-dim)}
+.vol.on{background:var(--brass);color:#151515;font-weight:700;border-color:var(--brass)}
+.verdict{padding:14px;border-radius:11px;font-size:17px;font-weight:700;text-align:center}
+.verdict.yes{background:var(--brass);color:#151515}
+.verdict.wish{background:var(--teal);color:#0C1A18}
+.verdict.no{background:var(--surface-2);color:var(--ink);border:1px solid var(--line)}
+nav button{font-size:9.5px}
 .toast{
   position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 16px);
   background:var(--surface-2);border:1px solid var(--line);border-radius:9px;
@@ -200,10 +209,11 @@ nav button.on{color:var(--brass)}
 </header>
 
 <main>
-  <section class="view on" id="v-lib"><div class="grid" id="grid"></div><div id="libEmpty"></div></section>
+  <section class="view on" id="v-lib"><button class="btn instore" id="instore">Scanner en magasin</button><div class="grid" id="grid"></div><div id="libEmpty"></div></section>
   <section class="view" id="v-add"></section>
   <section class="view" id="v-loans"></section>
   <section class="view" id="v-stats"></section>
+  <section class="view" id="v-tools"></section>
   <section class="view" id="v-set"></section>
 </main>
 
@@ -335,9 +345,16 @@ function openItem(id){
     ["Avancement", it.progress],
     ["Temps de jeu", it.playtime ? it.playtime + " h" : ""],
     ["Note", it.rating ? it.rating+"/10" : ""],
-    ["Tomes", isVolumes(it.category) && it.volumes ? it.volumes + (it.volumesTotal? " / "+it.volumesTotal : "") : ""],
+    ["Tomes", isVolumes(it.category) && (it.vols||[]).length ? rangeText(it.vols) + (it.volumesTotal? " sur "+it.volumesTotal : "") : ""],
+    ["Il te manque", missingVols(it).length ? rangeText(missingVols(it)) : ""],
+    ["État", it.condition],
+    ["Région", it.region],
+    ["Rangé", it.location],
+    ["Terminé le", fmtDate(it.finishedDate)],
+    ["Temps passé", it.hours ? it.hours+" h" : ""],
     ["Acquis le", it.purchaseDate],
     ["Prix", it.price ? it.price+" €" : (it.price===0?"Gratuit":"")],
+    ["Valeur estimée", typeof it.estValue==="number" ? it.estValue.toFixed(2).replace(".",",")+" €"+(it.estSource?" ("+it.estSource+")":"") : ""],
     ["Provenance", it.store],
     ["Tags", (it.tags||[]).join(", ")]
   ].filter(r=>r[1]!==""&&r[1]!=null);
@@ -371,7 +388,8 @@ function openItem(id){
     ${loanBlock}${hist}
     <div class="stack" style="margin-top:14px">
       <button class="btn" data-act="edit" data-id="${it.id}">Modifier</button>
-      ${it.status==="wishlist"?`<button class="btn ghost" data-act="acquire" data-id="${it.id}">Je l'ai acheté</button>`:""}
+      ${it.status==="wishlist"?`<button class="btn ghost" data-act="acquire" data-id="${it.id}">Je l'ai acheté</button>`
+        :`<button class="btn ghost" data-act="wish" data-id="${it.id}">Déplacer vers mes envies</button>`}
       <button class="btn danger" data-act="del" data-id="${it.id}">Supprimer</button>
     </div>`);
 }
@@ -393,9 +411,19 @@ function openForm(it){
       <div class="field"><label for="f-progress">Avancement</label><select id="f-progress"></select></div>
     </div>
     <div id="f-platwrap" class="field"><label for="f-plat">Plateforme</label><select id="f-plat"><option value=""></option>${opts(PLATFORMS,it.platform)}</select></div>
-    <div id="f-volwrap" class="row">
-      <div class="field"><label for="f-vol">Tomes possédés</label><input id="f-vol" value="${esc(it.volumes||"")}" placeholder="12"></div>
-      <div class="field"><label for="f-voltot">Tomes parus</label><input id="f-voltot" value="${esc(it.volumesTotal||"")}" placeholder="24"></div>
+    <div id="f-volwrap">
+      <div class="field" style="max-width:50%"><label for="f-voltot">Tomes parus</label><input id="f-voltot" inputmode="numeric" value="${esc(it.volumesTotal||"")}" placeholder="24"></div>
+      <label>Tomes que tu possèdes</label>
+      <div class="volgrid" id="f-volgrid"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label for="f-cond">État</label><select id="f-cond">${opts(["","Neuf scellé","Complet en boîte","Sans notice","Loose","Abîmé"],it.condition||"")}</select></div>
+      <div class="field"><label for="f-region">Région</label><select id="f-region">${opts(["","PAL","NTSC-U","NTSC-J","Zone A","Zone B","Toutes zones"],it.region||"")}</select></div>
+    </div>
+    <div class="field"><label for="f-loc">Où c'est rangé</label><input id="f-loc" value="${esc(it.location||"")}" placeholder="Étagère salon, boîte 3, bureau…"></div>
+    <div class="row">
+      <div class="field"><label for="f-fin">Terminé le</label><input id="f-fin" type="date" value="${esc(it.finishedDate||"")}"></div>
+      <div class="field"><label for="f-hours">Temps passé (h)</label><input id="f-hours" inputmode="numeric" value="${esc(it.hours||"")}"></div>
     </div>
     <div class="row">
       <div class="field"><label for="f-creator">Auteur / studio</label><input id="f-creator" value="${esc(it.creator||"")}"></div>
@@ -411,8 +439,9 @@ function openForm(it){
     </div>
     <div class="row">
       <div class="field"><label for="f-store">Provenance</label><input id="f-store" value="${esc(it.store||"")}" placeholder="Fnac, Vinted, cadeau…"></div>
-      <div class="field"><label for="f-rating">Ma note /10</label><input id="f-rating" inputmode="numeric" value="${esc(it.rating||"")}"></div>
+      <div class="field"><label for="f-est">Valeur estimée (€)</label><input id="f-est" inputmode="decimal" value="${it.estValue===0||it.estValue?esc(it.estValue):""}"></div>
     </div>
+    <div class="field" style="max-width:50%"><label for="f-rating">Ma note /10</label><input id="f-rating" inputmode="numeric" value="${esc(it.rating||"")}"></div>
     <div class="field"><label for="f-tags">Tags</label><input id="f-tags" value="${esc((it.tags||[]).join(", "))}" placeholder="horreur, à revoir, signé"></div>
     <div class="field"><label for="f-notes">Mes notes</label><textarea id="f-notes" rows="3">${esc(it.notes||"")}</textarea></div>
     <div class="field"><label for="f-cover">URL de la jaquette</label><input id="f-cover" value="${esc(it.cover||"")}"></div>
@@ -421,12 +450,29 @@ function openForm(it){
 
   const catSel = document.getElementById("f-cat");
   catSel.innerHTML = Object.entries(CATS).map(([k,v])=>`<option value="${k}"${k===cat?" selected":""}>${v.label}</option>`).join("");
+  let vols = Array.isArray(it.vols) ? it.vols.slice() : [];
+  function drawVols(){
+    const tot = Math.min(parseInt(document.getElementById("f-voltot").value,10) || 0, 300);
+    const g = document.getElementById("f-volgrid");
+    if(!tot){ g.innerHTML = `<p class="note">Indique le nombre de tomes parus pour cocher ceux que tu as.</p>`; return; }
+    let h = "";
+    for(let n=1;n<=tot;n++) h += `<button type="button" class="vol${vols.includes(n)?" on":""}" data-v="${n}">${n}</button>`;
+    g.innerHTML = h;
+  }
+  document.getElementById("f-volgrid").onclick = e=>{
+    const b = e.target.closest("[data-v]"); if(!b) return;
+    const n = +b.dataset.v;
+    if(vols.includes(n)) vols = vols.filter(x=>x!==n); else vols.push(n);
+    b.classList.toggle("on");
+  };
+  document.getElementById("f-voltot").oninput = drawVols;
   function syncCat(){
     const c = catSel.value;
     document.getElementById("f-platwrap").style.display = c==="jeu" ? "" : "none";
-    document.getElementById("f-volwrap").style.display  = isVolumes(c) ? "flex" : "none";
+    document.getElementById("f-volwrap").style.display  = isVolumes(c) ? "" : "none";
     const ps = document.getElementById("f-progress");
     ps.innerHTML = `<option value=""></option>` + PROGRESS[c].map(p=>`<option${p===it.progress?" selected":""}>${p}</option>`).join("");
+    if(isVolumes(c)) drawVols();
   }
   catSel.onchange = syncCat; syncCat();
 
@@ -434,17 +480,21 @@ function openForm(it){
     const v = id => document.getElementById(id).value.trim();
     if(!v("f-title")) return toast("Il faut au moins un titre");
     const priceRaw = v("f-price").replace(",",".");
+    const estRaw = v("f-est").replace(",",".");
     const rec = Object.assign({}, it, {
       id: it.id || uid(),
       title: v("f-title"), category: catSel.value, year: v("f-year"),
       status: v("f-status"), progress: v("f-progress"),
       platform: catSel.value==="jeu" ? v("f-plat") : "",
-      volumes: isVolumes(catSel.value) ? v("f-vol") : "",
+      vols: isVolumes(catSel.value) ? vols.slice().sort((a,b)=>a-b) : [],
       volumesTotal: isVolumes(catSel.value) ? v("f-voltot") : "",
+      condition: v("f-cond"), region: v("f-region"), location: v("f-loc"),
+      finishedDate: v("f-fin"), hours: v("f-hours"),
       creator: v("f-creator"), publisher: v("f-pub"),
       format: v("f-format"), edition: v("f-edition"),
       purchaseDate: v("f-date"),
       price: priceRaw==="" ? "" : (isNaN(parseFloat(priceRaw)) ? "" : parseFloat(priceRaw)),
+      estValue: estRaw==="" ? "" : (isNaN(parseFloat(estRaw)) ? "" : parseFloat(estRaw)),
       store: v("f-store"), rating: v("f-rating"),
       tags: v("f-tags") ? v("f-tags").split(",").map(t=>t.trim()).filter(Boolean) : [],
       notes: v("f-notes"), cover: v("f-cover"),
@@ -458,7 +508,7 @@ function openForm(it){
 }
 
 /* ================= APIs ================= */
-const PROXIED = ["api.rawg.io","api.steampowered.com"];
+const PROXIED = ["api.rawg.io","api.steampowered.com","store.steampowered.com"];
 function px(url){
   const p = (S.settings.proxy||"").trim();
   if(!p) return url;
@@ -617,12 +667,24 @@ async function doSearch(){
     if(!res.length){ out.innerHTML = `<p class="note">Aucun résultat. Essaie le titre original, ou passe par la saisie manuelle.</p>`; return; }
     window._res = res;
     out.innerHTML = res.map((r,i)=>`
-      <button class="res" data-i="${i}">
-        ${r.cover?`<img src="${esc(r.cover)}" alt="" loading="lazy">`:`<span class="noimg"></span>`}
-        <span><span class="res-t">${esc(r.title)}</span>
-        <span class="res-s">${esc([r.year, r.creator, r.publisher, (r.platformList||[]).slice(0,3).join(", ")].filter(Boolean).join(" · "))}</span></span>
-      </button>`).join("");
+      <div class="res">
+        <button data-i="${i}" style="display:flex;gap:11px;flex:1;text-align:left;min-width:0;padding:0">
+          ${r.cover?`<img src="${esc(r.cover)}" alt="" loading="lazy">`:`<span class="noimg"></span>`}
+          <span><span class="res-t">${esc(r.title)}</span>
+          <span class="res-s">${esc([r.year, r.creator, r.publisher, (r.platformList||[]).slice(0,3).join(", ")].filter(Boolean).join(" · "))}</span></span>
+        </button>
+        <button class="btn sm ghost" data-w="${i}" style="flex:0 0 auto;align-self:center">Envie</button>
+      </div>`).join("");
     out.onclick = e => {
+      const wb = e.target.closest("[data-w]");
+      if(wb){
+        const r = window._res[+wb.dataset.w];
+        S.items.push({ id:uid(), category:addCat, status:"wishlist", format:"Physique", edition:"Standard",
+          title:r.title, year:r.year||"", cover:r.cover||"", overview:r.overview||"", creator:r.creator||"",
+          publisher:r.publisher||"", volumesTotal:r.volumesTotal||"", tags:[], addedAt:new Date().toISOString() });
+        save(); wb.textContent = "Ajouté"; wb.disabled = true; toast("Ajouté à tes envies");
+        return;
+      }
       const b = e.target.closest("[data-i]"); if(!b) return;
       const r = window._res[+b.dataset.i];
       openForm(Object.assign({category:addCat}, r, {platformList:undefined}));
@@ -761,19 +823,26 @@ function renderScanList(){
 
 /* ================= prêts ================= */
 function renderLoans(){
-  const out = S.items.filter(i=>i.loan).sort((a,b)=>(a.loan.date||"").localeCompare(b.loan.date||""));
+  const out = S.items.filter(i=>i.loan);
   const today = new Date().toISOString().slice(0,10);
-  document.getElementById("v-loans").innerHTML = out.length ? `
-    <div class="panel"><h2>${out.length} objet${out.length>1?"s":""} chez quelqu'un</h2>
-      ${out.map(it=>{
-        const late = it.loan.due && it.loan.due < today;
+  const byPerson = new Map();
+  out.forEach(i=>{ const k = i.loan.to; if(!byPerson.has(k)) byPerson.set(k,[]); byPerson.get(k).push(i); });
+  const people = [...byPerson.entries()].sort((a,b)=>b[1].length-a[1].length);
+  document.getElementById("v-loans").innerHTML = people.length ? people.map(([who,items])=>{
+    const late = items.filter(i=>i.loan.due && i.loan.due < today);
+    return `<div class="panel">
+      <h2>${esc(who)} — ${items.length} objet${items.length>1?"s":""}${late.length?` <span class="late">(${late.length} en retard)</span>`:""}</h2>
+      ${items.map(it=>{
+        const l = it.loan.due && it.loan.due < today;
         return `<div class="loan-item">
           ${it.cover?`<img src="${esc(it.cover)}" alt="">`:`<span class="noimg"></span>`}
           <span class="t"><b>${esc(it.title)}</b>
-          <span class="${late?"late":""}">${esc(it.loan.to)} · depuis le ${esc(fmtDate(it.loan.date))}${it.loan.due?(late?" · en retard":" · retour le "+esc(fmtDate(it.loan.due))):""}</span></span>
+          <span class="${l?"late":""}">depuis le ${esc(fmtDate(it.loan.date))}${it.loan.due?(l?" · retour dépassé":" · retour le "+esc(fmtDate(it.loan.due))):""}</span></span>
           <button class="btn sm ghost" data-act="return" data-id="${it.id}">Rendu</button>
         </div>`;}).join("")}
-    </div>` : `<div class="empty"><strong>Aucun prêt en cours</strong>Ouvre une fiche pour noter à qui tu la prêtes.</div>`;
+      <button class="btn sm ghost" data-act="remind" data-who="${esc(who)}" style="margin-top:10px;width:100%">Écrire une relance</button>
+    </div>`;}).join("")
+    : `<div class="empty"><strong>Aucun prêt en cours</strong>Ouvre une fiche pour noter à qui tu la prêtes.</div>`;
   const hist = S.items.flatMap(i=>(i.loanHistory||[]).map(h=>({t:i.title,...h}))).sort((a,b)=>(b.back||"").localeCompare(a.back||"")).slice(0,15);
   if(hist.length){
     document.getElementById("v-loans").innerHTML += `<div class="panel"><h2>Historique</h2>${
@@ -806,6 +875,12 @@ function renderStats(){
   const byYear = tally(own.filter(i=>i.purchaseDate), i=>i.purchaseDate.slice(0,4));
   const byFmt = tally(own, i=>i.format||"—");
 
+  const withEst = own.filter(i=>typeof i.estValue==="number");
+  const estTotal = withEst.reduce((s,i)=>s+i.estValue,0);
+  const wishCost = wish.filter(i=>typeof i.estValue==="number").reduce((s,i)=>s+i.estValue,0);
+  const top = withEst.slice().sort((a,b)=>b.estValue-a.estValue).slice(0,5);
+  const eur = n => n.toFixed(2).replace(".",",") + " €";
+
   document.getElementById("v-stats").innerHTML = `
     <div class="big">
       <div class="stat"><b>${own.length}</b><span>dans la collection</span></div>
@@ -813,9 +888,15 @@ function renderStats(){
       <div class="stat"><b>${done.length}</b><span>terminés</span></div>
       <div class="stat"><b>${wish.length}</b><span>en liste d'envies</span></div>
     </div>
-    <div class="panel"><h2>Dépenses saisies</h2>
-      <p style="font-size:24px;font-weight:700;margin:0">${spent.toFixed(2).replace(".",",")} €</p>
-      <p class="note">Sur ${own.filter(i=>typeof i.price==="number").length} fiches où tu as noté un prix. Le reste n'est pas compté.</p>
+    <div class="panel"><h2>Valeur de la collection</h2>
+      <div class="kv" style="margin:0">
+        <dt>Dépensé</dt><dd>${eur(spent)}</dd>
+        <dt>Valeur estimée</dt><dd>${eur(estTotal)}</dd>
+        <dt>Écart</dt><dd style="color:${estTotal-spent>=0?"var(--teal)":"var(--clay)"}">${estTotal-spent>=0?"+":""}${eur(estTotal-spent)}</dd>
+        ${wishCost?`<dt>Coût des envies</dt><dd>${eur(wishCost)}</dd>`:""}
+      </div>
+      <p class="note" style="margin-top:10px">Calculé sur ${withEst.length} fiche${withEst.length>1?"s":""} valorisée${withEst.length>1?"s":""} sur ${own.length}, et ${own.filter(i=>typeof i.price==="number").length} avec un prix d'achat saisi. Les fiches sans chiffre ne comptent pas : ces totaux sont des planchers, pas la valeur réelle de ta collection.</p>
+      ${top.length?`<div class="bars" style="margin-top:12px">${(()=>{const m=top[0].estValue;return top.map(t=>`<div class="bar-row"><span class="lab">${esc(t.title)}</span><span class="bar"><i style="width:${t.estValue/m*100}%"></i></span><span class="n">${Math.round(t.estValue)}</span></div>`).join("")})()}</div>`:""}
     </div>
     ${bars("Par catégorie", byCat)}
     ${byPlat.length?bars("Par plateforme", byPlat):""}
@@ -865,7 +946,8 @@ function renderSettings(){
       <p class="note">Steam refuse les appels directs depuis un navigateur : renseigne d'abord une URL de proxy plus haut, sinon ça échouera.</p>
       <div class="field" style="margin-top:11px"><label for="st-key">Clé API Steam</label><input id="st-key" value="${esc(S.settings.steamKey||"")}" placeholder="steamcommunity.com/dev/apikey"></div>
       <div class="field"><label for="st-id">SteamID64 ou pseudo d'URL</label><input id="st-id" value="${esc(S.settings.steamId||"")}" placeholder="76561198… ou monpseudo"></div>
-      <button class="btn ghost" id="st-go">Importer ma bibliothèque</button>
+      <div class="row"><button class="btn ghost" id="st-go">Importer ma bibliothèque</button><button class="btn ghost" id="st-price">Récupérer les prix</button></div>
+      <p class="note" style="margin-top:9px">Les prix récupérés sont ceux affichés aujourd'hui sur la boutique Steam en euros, promotions comprises. Ce n'est pas une valeur de revente : un jeu Steam ne se revend pas.</p>
       <div id="steamOut"></div>
     </div>
     <div class="panel"><h2>Importer un CSV</h2>
@@ -902,6 +984,7 @@ function renderSettings(){
   document.getElementById("p-go").onclick = plexSections;
   document.getElementById("p-find").onclick = plexDiscover;
   document.getElementById("st-go").onclick = steamImport;
+  document.getElementById("st-price").onclick = steamPrices;
   document.getElementById("s-wipe").onclick = ()=>{
     if(!confirm("Effacer les "+S.items.length+" fiches ? Irréversible.")) return;
     S.items = []; save(); renderAll(); toast("Collection vidée");
@@ -992,6 +1075,34 @@ async function steamImport(){
     save(); renderAll();
     toast(`${added} jeux ajoutés, ${updated} mis à jour`);
   }catch(e){ fail("Échec : " + e.message); }
+}
+
+async function steamPrices(){
+  const out = document.getElementById("steamOut");
+  const games = S.items.filter(i=>i.steamAppId);
+  if(!games.length){ out.innerHTML = `<p class="note" style="margin-top:10px">Importe d'abord ta bibliothèque.</p>`; return; }
+  out.innerHTML = `<div class="prog"><i id="sp"></i></div><p class="note" id="sps">0 / ${games.length}</p>`;
+  const lots = [];
+  for(let i=0;i<games.length;i+=10) lots.push(games.slice(i,i+10));
+  let done = 0, valued = 0, free = 0;
+  for(const lot of lots){
+    const ids = lot.map(g=>g.steamAppId).join(",");
+    try{
+      const d = await getJSON(`https://store.steampowered.com/api/appdetails?appids=${ids}&filters=price_overview&cc=fr&l=french`, 2);
+      lot.forEach(g=>{
+        const e = d[g.steamAppId];
+        const p = e && e.success && e.data && e.data.price_overview;
+        if(p && typeof p.final === "number"){ g.estValue = p.final/100; g.estSource = "prix Steam"; valued++; }
+        else { g.estValue = 0; g.estSource = "gratuit ou retiré de la vente"; free++; }
+      });
+    }catch(e){ /* lot manqué, on continue */ }
+    done += lot.length;
+    document.getElementById("sp").style.width = (done/games.length*100)+"%";
+    document.getElementById("sps").textContent = `${done} / ${games.length}`;
+    await new Promise(r=>setTimeout(r, 420));
+  }
+  save(); renderAll();
+  toast(`${valued} jeux valorisés, ${free} à zéro`);
 }
 
 /* ================= Plex ================= */
@@ -1130,6 +1241,189 @@ async function plexImport(dirs){
   toast(`${added} ajoutés, ${updated} mis à jour`);
 }
 
+/* ================= utilitaires ================= */
+const norm = s => String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+  .replace(/\b(le|la|les|the|un|une|a|of|de|du|des)\b/g," ").replace(/[^a-z0-9]+/g," ").trim();
+const codeOf = it => it.ean || it.isbn || "";
+const findByCode = c => S.items.find(i => codeOf(i) === String(c));
+function fuzzy(title){
+  const n = norm(title); if(n.length < 3) return null;
+  return S.items.find(i=>{
+    const m = norm(i.title);
+    return m===n || (m.length>4 && n.length>4 && (m.includes(n) || n.includes(m)));
+  });
+}
+function rangeText(nums){
+  const s = [...new Set(nums)].sort((a,b)=>a-b);
+  if(!s.length) return "";
+  const out = []; let a = s[0], p = s[0];
+  for(let i=1;i<=s.length;i++){
+    const c = s[i];
+    if(c === p+1){ p = c; continue; }
+    out.push(a===p ? String(a) : a+"-"+p); a = c; p = c;
+  }
+  return out.join(", ");
+}
+function missingVols(it){
+  const tot = parseInt(it.volumesTotal,10);
+  if(!tot || !Array.isArray(it.vols)) return [];
+  const own = new Set(it.vols), m = [];
+  for(let n=1;n<=tot;n++) if(!own.has(n)) m.push(n);
+  return m;
+}
+const eur = n => (Math.round(n*100)/100).toFixed(2).replace(".",",") + " €";
+
+/* ================= verdict en magasin ================= */
+async function openVerify(){
+  const catOpts = Object.entries(CATS).map(([k,v])=>`<option value="${k}"${k===addCat?" selected":""}>${v.label}</option>`).join("");
+  if(!("BarcodeDetector" in window)){
+    sheet("Vérifier", `<p class="note">Pas de lecteur de codes-barres dans ce navigateur. Tape le code :</p>
+      <div class="field" style="margin-top:12px"><input id="vcode" inputmode="numeric" placeholder="Code EAN / ISBN"></div>
+      <div class="field"><label for="vcat">Catégorie si tu l'ajoutes</label><select id="vcat">${catOpts}</select></div>
+      <button class="btn" id="vgo">Vérifier</button><div id="verdict"></div>`);
+    document.getElementById("vgo").onclick = ()=> showVerdict(document.getElementById("vcode").value.trim());
+    return;
+  }
+  sheet("Vérifier en magasin", `
+    <video id="vcam" playsinline style="width:100%;max-height:32vh;object-fit:cover;border-radius:12px;background:#000"></video>
+    <div class="field" style="margin-top:9px"><label for="vcat">Catégorie si tu l'ajoutes</label><select id="vcat">${catOpts}</select></div>
+    <div id="verdict"><p class="note">Vise le code-barres au dos.</p></div>`);
+  let stream;
+  try{ stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}); }
+  catch(e){ document.getElementById("verdict").innerHTML = `<p class="note">Caméra refusée.</p>`; return; }
+  const v = document.getElementById("vcam"); v.srcObject = stream; await v.play();
+  const det = new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e"]});
+  const stop = ()=> stream.getTracks().forEach(t=>t.stop());
+  let lastCode = "", busy = false;
+  const tick = async ()=>{
+    if(!document.getElementById("vcam")) return stop();
+    if(!busy){
+      try{
+        const c = await det.detect(v);
+        if(c.length && c[0].rawValue !== lastCode){
+          lastCode = c[0].rawValue; busy = true;
+          if(navigator.vibrate) navigator.vibrate(60);
+          await showVerdict(lastCode);
+          busy = false;
+        }
+      }catch(e){ busy = false; }
+    }
+    requestAnimationFrame(tick);
+  };
+  tick();
+}
+function verdictCard(it, code){
+  const where = [it.platform, it.format, it.condition, it.region].filter(Boolean).join(" · ");
+  const loan = it.loan ? `<p class="note late">Prêté à ${esc(it.loan.to)} depuis le ${esc(fmtDate(it.loan.date))}</p>` : "";
+  const miss = missingVols(it);
+  return `<div class="verdict ${it.status==="wishlist"?"wish":"yes"}">${it.status==="wishlist"?"C'est dans tes envies":"Tu l'as déjà"}</div>
+    <div class="detail-top" style="margin-top:12px">${coverHTML(it)}
+      <div class="detail-meta"><h3>${esc(it.title)}</h3>
+      <p>${esc(where||CATS[it.category].label)}</p>
+      ${it.location?`<p>Rangé : ${esc(it.location)}</p>`:""}
+      ${miss.length?`<p>Il te manque les tomes ${esc(rangeText(miss))}</p>`:""}</div></div>
+    ${loan}
+    ${code && !codeOf(it) ? `<button class="btn ghost" data-act="bind" data-id="${it.id}" data-code="${esc(code)}">Associer ce code à la fiche</button>` : ""}`;
+}
+async function showVerdict(code){
+  const box = document.getElementById("verdict");
+  if(!box || !code) return;
+  const hit = findByCode(code);
+  if(hit){ box.innerHTML = verdictCard(hit); return; }
+  box.innerHTML = `<p class="note">Code ${esc(code)} inconnu de ta collection. Identification…</p>`;
+  const r = await isbnLookup(code);
+  if(r && r.title){
+    const f = fuzzy(r.title);
+    if(f){ box.innerHTML = verdictCard(f, code) + `<p class="note">Reconnu comme « ${esc(r.title)} », rapproché de ta fiche par le titre.</p>`; return; }
+    window._verif = Object.assign({}, r, {code});
+    box.innerHTML = `<div class="verdict no">Tu ne l'as pas</div>
+      <div class="detail-top" style="margin-top:12px">${coverHTML({title:r.title, cover:r.cover})}
+      <div class="detail-meta"><h3>${esc(r.title)}</h3><p>${esc([r.creator,r.year,r.publisher].filter(Boolean).join(" · "))}</p></div></div>
+      <div class="stack"><button class="btn" data-act="vadd" data-st="collection">Je l'achète, ajouter</button>
+      <button class="btn ghost" data-act="vadd" data-st="wishlist">Mettre dans mes envies</button></div>`;
+    return;
+  }
+  window._verif = {code, title:""};
+  box.innerHTML = `<div class="verdict no">Tu ne l'as pas</div>
+    <p class="note">Code ${esc(code)} introuvable en ligne. Aucune base gratuite ne couvre les codes des jeux et des DVD.</p>
+    <button class="btn ghost" data-act="vmanual">Créer la fiche à la main</button>`;
+}
+
+/* ================= outils ================= */
+function renderTools(){
+  const own = S.items.filter(i=>i.status==="collection");
+  const series = own.filter(i=>isVolumes(i.category) && missingVols(i).length);
+  const incomplete = own.filter(i=>!i.cover || !i.year);
+  const dupes = groupDupes(own);
+  const supports = crossSupport(own);
+  document.getElementById("v-tools").innerHTML = `
+    <div class="panel"><h2>Ce soir, je fais quoi</h2>
+      <div class="row"><select id="pickCat"><option value="">Toutes catégories</option>${Object.entries(CATS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join("")}</select>
+      <button class="btn sm" id="pickGo" style="flex:0 0 auto">Pioche</button></div>
+      <div id="pickOut"></div>
+    </div>
+    <div class="panel"><h2>Tomes manquants</h2>
+      ${series.length ? series.map(s=>`<p class="note"><b style="color:var(--ink)">${esc(s.title)}</b> — il te manque ${esc(rangeText(missingVols(s)))}</p>`).join("")
+        : `<p class="note">Rien à compléter. Renseigne le nombre de tomes parus sur tes séries pour que cette liste se remplisse.</p>`}
+    </div>
+    <div class="panel"><h2>Fiches à nettoyer</h2>
+      <p class="note">${incomplete.length} fiche${incomplete.length>1?"s":""} sans jaquette ou sans année.</p>
+      ${incomplete.slice(0,25).map(i=>`<button class="res" data-act="edit" data-id="${i.id}"><span class="noimg"></span><span><span class="res-t">${esc(i.title)}</span><span class="res-s">${!i.cover?"pas de jaquette":""}${!i.cover&&!i.year?" · ":""}${!i.year?"pas d'année":""}</span></span></button>`).join("")}
+      ${incomplete.length>25?`<p class="note">…et ${incomplete.length-25} autres.</p>`:""}
+    </div>
+    <div class="panel"><h2>Doublons probables</h2>
+      ${dupes.length ? dupes.map(g=>`<p class="note"><b style="color:var(--ink)">${esc(g[0].title)}</b> — ${g.length} fiches : ${esc(g.map(x=>[x.platform,x.format].filter(Boolean).join(" ")||CATS[x.category].label).join(", "))}</p>`).join("")
+        : `<p class="note">Aucun doublon détecté.</p>`}
+    </div>
+    <div class="panel"><h2>Même titre, deux supports</h2>
+      ${supports.length ? supports.map(g=>`<p class="note"><b style="color:var(--ink)">${esc(g[0].title)}</b> — ${esc(g.map(x=>x.format+(x.store?" ("+x.store+")":"")).join(" et "))}</p>`).join("")
+        : `<p class="note">Rien en double entre physique et numérique.</p>`}
+    </div>
+    <div class="panel"><h2>Inventaire pour l'assurance</h2>
+      <p class="note">Un tableau imprimable avec état, région, emplacement et valeurs. À garder ailleurs que chez toi.</p>
+      <button class="btn ghost" id="insGo" style="margin-top:9px">Générer l'inventaire</button>
+    </div>`;
+  document.getElementById("pickGo").onclick = ()=>{
+    const c = document.getElementById("pickCat").value;
+    const pool = own.filter(i=>/^(Backlog|À voir|À lire)$/.test(i.progress||"") && (!c || i.category===c));
+    const o = document.getElementById("pickOut");
+    if(!pool.length){ o.innerHTML = `<p class="note" style="margin-top:10px">Rien en attente dans cette catégorie.</p>`; return; }
+    const p = pool[Math.floor(Math.random()*pool.length)];
+    o.innerHTML = `<button class="res" data-id2="${p.id}" style="margin-top:10px">
+      ${p.cover?`<img src="${esc(p.cover)}" alt="">`:`<span class="noimg"></span>`}
+      <span><span class="res-t">${esc(p.title)}</span><span class="res-s">${esc([p.platform,p.year,p.location].filter(Boolean).join(" · "))}</span></span></button>`;
+    o.querySelector("[data-id2]").onclick = ()=> openItem(p.id);
+  };
+  document.getElementById("insGo").onclick = exportInventory;
+}
+function groupDupes(list){
+  const m = new Map();
+  list.forEach(i=>{ const k = i.category+"|"+norm(i.title); if(!m.has(k)) m.set(k,[]); m.get(k).push(i); });
+  return [...m.values()].filter(g=>g.length>1);
+}
+function crossSupport(list){
+  const m = new Map();
+  list.forEach(i=>{ const k = norm(i.title); if(!m.has(k)) m.set(k,[]); m.get(k).push(i); });
+  return [...m.values()].filter(g=>g.length>1 && new Set(g.map(x=>x.format)).size>1);
+}
+function exportInventory(){
+  const own = S.items.filter(i=>i.status==="collection");
+  const tot = own.reduce((s,i)=>s+(typeof i.estValue==="number"?i.estValue:0),0);
+  const rows = own.sort((a,b)=>(a.category+a.title).localeCompare(b.category+b.title,"fr")).map(i=>
+    `<tr><td>${esc(i.title)}</td><td>${esc(CATS[i.category].label)}</td><td>${esc(i.platform||"")}</td><td>${esc(i.year||"")}</td><td>${esc(i.condition||"")}</td><td>${esc(i.region||"")}</td><td>${esc(i.location||"")}</td><td>${esc(i.purchaseDate||"")}</td><td style="text-align:right">${typeof i.estValue==="number"?eur(i.estValue):""}</td></tr>`).join("");
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Inventaire</title>
+    <style>body{font-family:system-ui,sans-serif;margin:24px;font-size:13px}h1{font-size:19px}
+    table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:5px 7px;text-align:left}
+    th{background:#eee}tfoot td{font-weight:700}</style></head><body>
+    <h1>Inventaire de collection</h1>
+    <p>${own.length} objets — établi le ${new Date().toLocaleDateString("fr-FR")}. Valeur déclarée sur ${own.filter(i=>typeof i.estValue==="number").length} objets valorisés.</p>
+    <table><thead><tr><th>Titre</th><th>Catégorie</th><th>Plateforme</th><th>Année</th><th>État</th><th>Région</th><th>Emplacement</th><th>Acquis le</th><th>Valeur</th></tr></thead>
+    <tbody>${rows}</tbody><tfoot><tr><td colspan="8">Total déclaré</td><td style="text-align:right">${eur(tot)}</td></tr></tfoot></table>
+    </body></html>`;
+  download("inventaire-collection.html", html, "text/html");
+  toast("Inventaire téléchargé");
+}
+
 /* ================= sheet, toast, nav ================= */
 const sheetEl = document.getElementById("sheet");
 function sheet(title, html){
@@ -1154,6 +1448,7 @@ const VIEWS = [
   ["add","Ajouter",'<circle cx="12" cy="12" r="8.5"/><path d="M12 8.5v7M8.5 12h7"/>'],
   ["loans","Prêts",'<path d="M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-7"/><path d="M3 8h18v4H3z"/><path d="M12 20V8"/><path d="M12 8s-3.5-4.5-5.5-2.5S9 8 12 8s5.5-4.5 3.5-2.5"/>'],
   ["stats","Stats",'<path d="M5 19V11M12 19V5M19 19v-6"/>'],
+  ["tools","Outils",'<path d="M14.7 6.3a4 4 0 0 1-5 5L4 17v3h3l5.7-5.7a4 4 0 0 0 5-5l-2.5 2.5-2.1-2.1Z"/>'],
   ["set","Réglages",'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 9 2.5h.1A2 2 0 1 1 13 2.5V3a1.6 1.6 0 0 0 2.7 1.1"/>']
 ];
 let cur = "lib";
@@ -1173,6 +1468,7 @@ function go(v){
   if(v==="add") renderAdd();
   if(v==="loans") renderLoans();
   if(v==="stats") renderStats();
+  if(v==="tools") renderTools();
   if(v==="set") renderSettings();
 }
 
@@ -1196,6 +1492,7 @@ document.getElementById("statChips").onclick = e=>{
   renderLib();
 };
 let qT;
+document.getElementById("instore").onclick = openVerify;
 document.getElementById("q").oninput = e=>{ clearTimeout(qT); qT = setTimeout(()=>{ F.q = e.target.value.trim(); renderLib(); }, 160); };
 
 /* ================= actions déléguées ================= */
@@ -1214,6 +1511,47 @@ document.addEventListener("click", e=>{
       it.status = "collection"; it.purchaseDate = it.purchaseDate || new Date().toISOString().slice(0,10);
       save(); closeSheet(); renderAll(); toast("Passé dans la collection"); break;
     case "lend": lend(id); break;
+    case "remind": {
+      const who = a.dataset.who;
+      const mine = S.items.filter(x=>x.loan && x.loan.to===who);
+      const liste = mine.map(x=>"« "+x.title+" »").join(", ");
+      const txt = `Salut ${who}, petit rappel sans pression : tu as toujours ${liste}${mine.length>1?"":""}, prêté${mine.length>1?"s":""} depuis le ${fmtDate(mine[0].loan.date)}. Tu me les rends quand ça t'arrange.`;
+      sheet("Relance pour "+who, `<textarea id="rem" rows="6">${esc(txt)}</textarea>
+        <button class="btn" id="remCopy" style="margin-top:11px">Copier le message</button>`);
+      document.getElementById("remCopy").onclick = ()=>{
+        const ta = document.getElementById("rem");
+        ta.select();
+        if(navigator.clipboard) navigator.clipboard.writeText(ta.value).catch(()=>{});
+        else document.execCommand("copy");
+        toast("Message copié");
+      };
+      break;
+    }
+    case "bind": {
+      it.ean = a.dataset.code; save();
+      a.outerHTML = `<p class="note">Code associé. La prochaine fois, la réponse sera immédiate et sans réseau.</p>`;
+      break;
+    }
+    case "vadd": {
+      const r = window._verif || {};
+      const c = (document.getElementById("vcat")||{}).value || addCat;
+      S.items.push({ id:uid(), category:c, status:a.dataset.st, format:"Physique", edition:"Standard",
+        title:r.title||"", year:r.year||"", cover:r.cover||"", creator:r.creator||"", publisher:r.publisher||"",
+        overview:r.overview||"", ean:r.code||"", tags:[], addedAt:new Date().toISOString(),
+        purchaseDate: a.dataset.st==="collection" ? new Date().toISOString().slice(0,10) : "" });
+      save(); renderAll();
+      const box = document.getElementById("verdict");
+      if(box) box.innerHTML = `<div class="verdict yes">${a.dataset.st==="collection"?"Ajouté à ta collection":"Ajouté à tes envies"}</div><p class="note">Scanne le suivant.</p>`;
+      break;
+    }
+    case "vmanual": {
+      const r = window._verif || {};
+      openForm({category:(document.getElementById("vcat")||{}).value || addCat, ean:r.code||""});
+      break;
+    }
+    case "wish":
+      if(it.loan) return toast("Impossible : il est prêté à "+it.loan.to);
+      it.status = "wishlist"; save(); closeSheet(); renderAll(); toast("Déplacé dans tes envies"); break;
     case "return": giveBack(id); break;
   }
 });
