@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#10161C">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Ma collection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#10161C;
+  --surface:#18212A;
+  --surface-2:#1F2B36;
+  --line:#2A3947;
+  --ink:#E9EFF4;
+  --ink-dim:#93A5B4;
+  --ink-faint:#61748350;
+  --brass:#E4A93C;
+  --teal:#5FA8A0;
+  --clay:#C4634A;
+  --radius:10px;
+  --nav-h:62px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:Archivo,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:15px;line-height:1.45;
+  padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom));
+  overscroll-behavior-y:none;
+}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none}
+input,select,textarea{
+  background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
+  padding:9px 11px;width:100%;outline:none;
+}
+input:focus,select,textarea:focus{border-color:var(--brass)}
+:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink-dim) 50%),linear-gradient(135deg,var(--ink-dim) 50%,transparent 50%);background-position:calc(100% - 16px) 50%,calc(100% - 11px) 50%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:32px}
+label{display:block;font-size:12px;color:var(--ink-dim);margin:0 0 4px 2px}
+.field{margin-bottom:12px}
+.row{display:flex;gap:10px}
+.row>*{flex:1;min-width:0}
+
+/* ---------- chrome ---------- */
+header{
+  position:sticky;top:0;z-index:30;background:rgba(16,22,28,.94);
+  backdrop-filter:blur(12px);border-bottom:1px solid var(--line);
+  padding:10px 14px 8px;padding-top:calc(10px + env(safe-area-inset-top));
+}
+.h-title{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:9px}
+.h-title h1{font-size:19px;font-weight:700;letter-spacing:-.02em;margin:0}
+.h-count{font-size:12px;color:var(--ink-dim);white-space:nowrap}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -14px;padding:2px 14px}
+.chips::-webkit-scrollbar{display:none}
+.chip{
+  flex:0 0 auto;padding:6px 12px;border-radius:999px;font-size:13px;
+  background:var(--surface-2);color:var(--ink-dim);border:1px solid transparent;white-space:nowrap;
+}
+.chip[aria-pressed="true"]{background:var(--brass);color:#151515;font-weight:600}
+main{padding:14px}
+.view{display:none}
+.view.on{display:block}
+
+/* ---------- grille ---------- */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+@media(min-width:520px){.grid{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:760px){.grid{grid-template-columns:repeat(6,1fr)};main{max-width:1100px;margin:0 auto}}
+.card{position:relative;text-align:left;display:block;width:100%}
+.cover{
+  position:relative;aspect-ratio:2/3;border-radius:var(--radius);overflow:hidden;
+  background:var(--surface-2);display:flex;align-items:center;justify-content:center;
+}
+.cover img{width:100%;height:100%;object-fit:cover;display:block}
+.cover .ph{font-size:11px;color:var(--ink-dim);padding:8px;text-align:center;line-height:1.25}
+.card h3{font-size:12px;font-weight:500;margin:6px 2px 0;line-height:1.25;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .sub{font-size:11px;color:var(--ink-dim);margin:1px 2px 0}
+.flag{
+  position:absolute;top:6px;left:6px;padding:2px 6px;border-radius:5px;
+  font-size:10px;font-weight:600;background:#151515CC;backdrop-filter:blur(4px);
+}
+.flag.wish{background:var(--teal);color:#0C1A18}
+.flag.loan{background:var(--clay);color:#fff}
+.flag.done{background:var(--brass);color:#151515}
+
+/* ---------- empty / misc ---------- */
+.empty{padding:48px 20px;text-align:center;color:var(--ink-dim)}
+.empty strong{display:block;color:var(--ink);font-size:16px;margin-bottom:6px}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  background:var(--brass);color:#151515;font-weight:600;padding:11px 16px;
+  border-radius:9px;width:100%;
+}
+.btn.ghost{background:var(--surface-2);color:var(--ink);border:1px solid var(--line);font-weight:500}
+.btn.danger{background:transparent;color:var(--clay);border:1px solid var(--clay)}
+.btn.sm{padding:7px 12px;font-size:13px;width:auto}
+.stack>*+*{margin-top:9px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.panel h2{font-size:14px;font-weight:600;margin:0 0 10px}
+.note{font-size:12px;color:var(--ink-dim);line-height:1.5}
+.note code{background:var(--surface-2);padding:1px 5px;border-radius:4px;font-size:11px}
+
+/* ---------- nav ---------- */
+nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:40;height:var(--nav-h);
+  padding-bottom:env(safe-area-inset-bottom);
+  background:rgba(16,22,28,.97);backdrop-filter:blur(12px);
+  border-top:1px solid var(--line);display:flex;
+}
+nav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--ink-dim);font-size:10px}
+nav button svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+nav button.on{color:var(--brass)}
+
+/* ---------- sheet ---------- */
+.sheet{position:fixed;inset:0;z-index:60;display:none}
+.sheet.on{display:block}
+.sheet-bg{position:absolute;inset:0;background:#05080BCC}
+.sheet-body{
+  position:absolute;left:0;right:0;bottom:0;max-height:94vh;overflow-y:auto;
+  background:var(--bg);border-radius:16px 16px 0 0;border-top:1px solid var(--line);
+  padding:0 14px calc(24px + env(safe-area-inset-bottom));
+}
+@media(min-width:760px){.sheet-body{max-width:640px;margin:0 auto;border-radius:16px;bottom:5vh;top:5vh;max-height:none}}
+.sheet-head{
+  position:sticky;top:0;background:var(--bg);padding:12px 0 10px;z-index:2;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);margin-bottom:14px;
+}
+.sheet-head h2{font-size:16px;font-weight:600;margin:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.x{font-size:22px;color:var(--ink-dim);padding:0 6px;line-height:1}
+.grabber{width:36px;height:4px;border-radius:2px;background:var(--line);margin:8px auto 0}
+
+/* ---------- detail ---------- */
+.detail-top{display:flex;gap:14px;margin-bottom:16px}
+.detail-top .cover{width:104px;flex:0 0 104px}
+.detail-meta h3{margin:0 0 4px;font-size:17px;line-height:1.2}
+.detail-meta p{margin:0 0 3px;font-size:13px;color:var(--ink-dim)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px;margin:12px 0}
+.kv dt{color:var(--ink-dim)}
+.kv dd{margin:0}
+.overview{font-size:13px;color:var(--ink-dim);line-height:1.55;margin:12px 0}
+
+/* ---------- résultats recherche ---------- */
+.res{display:flex;gap:11px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line);width:100%;text-align:left}
+.res img,.res .noimg{width:44px;height:66px;flex:0 0 44px;border-radius:5px;object-fit:cover;background:var(--surface-2)}
+.res-t{font-size:14px;font-weight:500;margin:0 0 2px}
+.res-s{font-size:12px;color:var(--ink-dim);margin:0}
+
+/* ---------- stats ---------- */
+.big{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-bottom:14px}
+@media(min-width:520px){.big{grid-template-columns:repeat(4,1fr)}}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:12px}
+.stat b{display:block;font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.stat span{font-size:11px;color:var(--ink-dim)}
+.bars{display:flex;flex-direction:column;gap:8px}
+.bar-row{display:grid;grid-template-columns:88px 1fr 38px;gap:9px;align-items:center;font-size:12px}
+.bar-row .lab{color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar{height:9px;border-radius:5px;background:var(--surface-2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--brass);border-radius:5px}
+.bar-row .n{text-align:right;font-variant-numeric:tabular-nums}
+
+/* ---------- prêts ---------- */
+.loan-item{display:flex;gap:11px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
+.loan-item img,.loan-item .noimg{width:38px;height:57px;flex:0 0 38px;border-radius:5px;object-fit:cover;background:var(--surface-2)}
+.loan-item .t{flex:1;min-width:0}
+.loan-item .t b{display:block;font-size:14px;font-weight:500}
+.loan-item .t span{font-size:12px;color:var(--ink-dim)}
+.late{color:var(--clay)}
+
+.toast{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 16px);
+  background:var(--surface-2);border:1px solid var(--line);border-radius:9px;
+  padding:10px 15px;font-size:13px;z-index:90;opacity:0;pointer-events:none;transition:opacity .18s
+}
+.toast.on{opacity:1}
+.prog{height:5px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin:9px 0}
+.prog i{display:block;height:100%;background:var(--teal);width:0;transition:width .15s}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="h-title">
+    <h1 id="viewTitle">Bibliothèque</h1>
+    <span class="h-count" id="viewCount"></span>
+  </div>
+  <div id="libControls">
+    <input id="q" type="search" placeholder="Chercher un titre, un auteur, une plateforme…" autocomplete="off">
+    <div class="chips" id="catChips" style="margin-top:8px"></div>
+    <div class="chips" id="statChips" style="margin-top:6px"></div>
+  </div>
+</header>
+
+<main>
+  <section class="view on" id="v-lib"><div class="grid" id="grid"></div><div id="libEmpty"></div></section>
+  <section class="view" id="v-add"></section>
+  <section class="view" id="v-loans"></section>
+  <section class="view" id="v-stats"></section>
+  <section class="view" id="v-set"></section>
+</main>
+
+<nav id="nav"></nav>
+
+<div class="sheet" id="sheet"><div class="sheet-bg" data-close></div>
+  <div class="sheet-body"><div class="grabber"></div>
+    <div class="sheet-head"><h2 id="sheetTitle"></h2><button class="x" data-close aria-label="Fermer">&times;</button></div>
+    <div id="sheetContent"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ================= état & stockage ================= */
+const KEY = "macollection.v1";
+let mem = null; // secours si localStorage indisponible (aperçu intégré)
+let S = { items:[], settings:{ tmdb:"", rawg:"", proxy:"" } };
+
+function save(){
+  const raw = JSON.stringify(S);
+  try { localStorage.setItem(KEY, raw); mem = null; }
+  catch(e){ mem = raw; }
+}
+function load(){
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); } catch(e){ raw = mem; }
+  if(!raw) return;
+  try {
+    const d = JSON.parse(raw);
+    S.items = Array.isArray(d.items) ? d.items : [];
+    S.settings = Object.assign(S.settings, d.settings || {});
+  } catch(e){ /* données illisibles : on repart d'une base vide, l'export reste possible */ }
+}
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ================= catégories ================= */
+const CATS = {
+  film:   { label:"Films",   src:"tmdb",  tmdbType:"movie" },
+  serie:  { label:"Séries",  src:"tmdb",  tmdbType:"tv" },
+  anime:  { label:"Animés",  src:"jikan", jikanType:"anime" },
+  jeu:    { label:"Jeux",    src:"rawg" },
+  livre:  { label:"Livres",  src:"books" },
+  manga:  { label:"Manga",   src:"jikan", jikanType:"manga" },
+  comic:  { label:"Comics",  src:"books" },
+  bd:     { label:"BD",      src:"books" }
+};
+const PROGRESS = {
+  film:["À voir","En cours","Vu"],
+  serie:["À voir","En cours","Terminé","Abandonné"],
+  anime:["À voir","En cours","Terminé","Abandonné"],
+  jeu:["Backlog","En cours","Terminé","100 %","Abandonné"],
+  livre:["À lire","En cours","Lu","Abandonné"],
+  manga:["À lire","En cours","À jour","Terminé","Abandonné"],
+  comic:["À lire","En cours","Lu","Abandonné"],
+  bd:["À lire","En cours","Lu","Abandonné"]
+};
+const isVolumes = c => c==="manga" || c==="comic" || c==="bd";
+const PLATFORMS = ["PS1","PS2","PS3","PS4","PS5","PSP","PS Vita","Xbox","Xbox 360","Xbox One","Xbox Series","NES","SNES","N64","GameCube","Wii","Wii U","Switch","Switch 2","Game Boy","GBA","DS","3DS","PC","Steam Deck","Mega Drive","Dreamcast","Autre"];
+
+/* ================= filtres ================= */
+let F = { cat:"all", stat:"collection", q:"" };
+
+function match(it){
+  if(F.cat!=="all" && it.category!==F.cat) return false;
+  if(F.stat==="collection" && it.status!=="collection") return false;
+  if(F.stat==="wishlist"   && it.status!=="wishlist") return false;
+  if(F.stat==="loaned"     && !it.loan) return false;
+  if(F.stat==="backlog"){
+    const p = it.progress||"";
+    if(it.status!=="collection" || !/^(Backlog|À voir|À lire)$/.test(p)) return false;
+  }
+  if(F.q){
+    const h = [it.title,it.creator,it.platform,it.publisher,(it.tags||[]).join(" "),it.year].join(" ").toLowerCase();
+    if(!h.includes(F.q.toLowerCase())) return false;
+  }
+  return true;
+}
+
+/* ================= rendu bibliothèque ================= */
+function coverHTML(it, cls){
+  if(it.cover) return `<div class="cover ${cls||""}"><img src="${esc(it.cover)}" alt="" loading="lazy" onerror="this.remove()"></div>`;
+  return `<div class="cover ${cls||""}"><span class="ph">${esc(it.title)}</span></div>`;
+}
+function flagHTML(it){
+  if(it.loan) return `<span class="flag loan">Prêté</span>`;
+  if(it.status==="wishlist") return `<span class="flag wish">Envie</span>`;
+  if(/^(Terminé|100 %|Vu|Lu)$/.test(it.progress||"")) return `<span class="flag done">${esc(it.progress)}</span>`;
+  return "";
+}
+function renderLib(){
+  const list = S.items.filter(match).sort((a,b)=>(a.title||"").localeCompare(b.title||"","fr"));
+  document.getElementById("viewCount").textContent = list.length + (list.length>1?" titres":" titre");
+  const grid = document.getElementById("grid");
+  const empty = document.getElementById("libEmpty");
+  if(!list.length){
+    grid.innerHTML = "";
+    empty.innerHTML = S.items.length
+      ? `<div class="empty"><strong>Rien avec ces filtres</strong>Change de catégorie ou vide la recherche.</div>`
+      : `<div class="empty"><strong>Collection vide</strong>Passe par l'onglet Ajouter, ou importe ta liste depuis Réglages.</div>`;
+    return;
+  }
+  empty.innerHTML = "";
+  grid.innerHTML = list.map(it=>`
+    <button class="card" data-id="${it.id}">
+      ${coverHTML(it)}${flagHTML(it)}
+      <h3>${esc(it.title)}</h3>
+      <p class="sub">${esc([it.platform||CATS[it.category]?.label, it.year].filter(Boolean).join(" · "))}</p>
+    </button>`).join("");
+}
+
+/* ================= fiche détail ================= */
+function openItem(id){
+  const it = S.items.find(x=>x.id===id); if(!it) return;
+  const rows = [
+    ["Catégorie", CATS[it.category]?.label],
+    ["Plateforme", it.platform],
+    [it.category==="jeu"?"Développeur":(it.category==="film"||it.category==="serie"||it.category==="anime")?"Réalisation":"Auteur", it.creator],
+    ["Éditeur", it.publisher],
+    ["Format", it.format],
+    ["Édition", it.edition],
+    ["Avancement", it.progress],
+    ["Note", it.rating ? it.rating+"/10" : ""],
+    ["Tomes", isVolumes(it.category) && it.volumes ? it.volumes + (it.volumesTotal? " / "+it.volumesTotal : "") : ""],
+    ["Acquis le", it.purchaseDate],
+    ["Prix", it.price ? it.price+" €" : (it.price===0?"Gratuit":"")],
+    ["Provenance", it.store],
+    ["Tags", (it.tags||[]).join(", ")]
+  ].filter(r=>r[1]!==""&&r[1]!=null);
+
+  let loanBlock = "";
+  if(it.loan){
+    loanBlock = `<div class="panel"><h2>Prêté à ${esc(it.loan.to)}</h2>
+      <p class="note">Depuis le ${esc(fmtDate(it.loan.date))}${it.loan.due?" · retour prévu le "+esc(fmtDate(it.loan.due)):""}</p>
+      <button class="btn sm ghost" style="margin-top:9px;width:100%" data-act="return" data-id="${it.id}">Marquer comme rendu</button></div>`;
+  } else if(it.status==="collection"){
+    loanBlock = `<div class="panel"><h2>Prêter</h2>
+      <div class="row"><div class="field" style="margin:0"><label for="lto">À qui</label><input id="lto" placeholder="Prénom"></div>
+      <div class="field" style="margin:0"><label for="ldue">Retour prévu</label><input id="ldue" type="date"></div></div>
+      <button class="btn sm ghost" style="margin-top:9px;width:100%" data-act="lend" data-id="${it.id}">Enregistrer le prêt</button></div>`;
+  }
+  const hist = (it.loanHistory||[]).length
+    ? `<p class="note">Déjà prêté ${it.loanHistory.length} fois · dernier : ${esc(it.loanHistory[it.loanHistory.length-1].to)}</p>` : "";
+
+  sheet(it.title, `
+    <div class="detail-top">
+      ${coverHTML(it)}
+      <div class="detail-meta">
+        <h3>${esc(it.title)}</h3>
+        <p>${esc([CATS[it.category]?.label, it.year, it.platform].filter(Boolean).join(" · "))}</p>
+        <p>${it.status==="wishlist"?"Liste d'envies":"Dans la collection"}</p>
+      </div>
+    </div>
+    ${it.overview?`<p class="overview">${esc(it.overview)}</p>`:""}
+    <dl class="kv">${rows.map(r=>`<dt>${esc(r[0])}</dt><dd>${esc(r[1])}</dd>`).join("")}</dl>
+    ${it.notes?`<div class="panel"><h2>Mes notes</h2><p class="note">${esc(it.notes)}</p></div>`:""}
+    ${loanBlock}${hist}
+    <div class="stack" style="margin-top:14px">
+      <button class="btn" data-act="edit" data-id="${it.id}">Modifier</button>
+      ${it.status==="wishlist"?`<button class="btn ghost" data-act="acquire" data-id="${it.id}">Je l'ai acheté</button>`:""}
+      <button class="btn danger" data-act="del" data-id="${it.id}">Supprimer</button>
+    </div>`);
+}
+function fmtDate(d){ if(!d) return ""; const p=String(d).split("-"); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
+
+/* ================= formulaire ================= */
+function openForm(it){
+  const isNew = !it.id;
+  const cat = it.category || "film";
+  const opts = (arr,cur)=>arr.map(o=>`<option value="${esc(o)}"${o===cur?" selected":""}>${esc(o)}</option>`).join("");
+  sheet(isNew?"Nouvelle fiche":"Modifier", `
+    <div class="field"><label for="f-title">Titre</label><input id="f-title" value="${esc(it.title||"")}"></div>
+    <div class="row">
+      <div class="field"><label for="f-cat">Catégorie</label><select id="f-cat"></select></div>
+      <div class="field"><label for="f-year">Année</label><input id="f-year" inputmode="numeric" value="${esc(it.year||"")}"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label for="f-status">Statut</label><select id="f-status"><option value="collection"${it.status!=="wishlist"?" selected":""}>Dans la collection</option><option value="wishlist"${it.status==="wishlist"?" selected":""}>Liste d'envies</option></select></div>
+      <div class="field"><label for="f-progress">Avancement</label><select id="f-progress"></select></div>
+    </div>
+    <div id="f-platwrap" class="field"><label for="f-plat">Plateforme</label><select id="f-plat"><option value=""></option>${opts(PLATFORMS,it.platform)}</select></div>
+    <div id="f-volwrap" class="row">
+      <div class="field"><label for="f-vol">Tomes possédés</label><input id="f-vol" value="${esc(it.volumes||"")}" placeholder="12"></div>
+      <div class="field"><label for="f-voltot">Tomes parus</label><input id="f-voltot" value="${esc(it.volumesTotal||"")}" placeholder="24"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label for="f-creator">Auteur / studio</label><input id="f-creator" value="${esc(it.creator||"")}"></div>
+      <div class="field"><label for="f-pub">Éditeur</label><input id="f-pub" value="${esc(it.publisher||"")}"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label for="f-format">Format</label><select id="f-format">${opts(["Physique","Numérique"],it.format||"Physique")}</select></div>
+      <div class="field"><label for="f-edition">Édition</label><select id="f-edition">${opts(["Standard","Collector","Steelbook","Coffret","Intégrale","Réédition"],it.edition||"Standard")}</select></div>
+    </div>
+    <div class="row">
+      <div class="field"><label for="f-date">Date d'acquisition</label><input id="f-date" type="date" value="${esc(it.purchaseDate||"")}"></div>
+      <div class="field"><label for="f-price">Prix payé (€)</label><input id="f-price" inputmode="decimal" value="${it.price===0||it.price?esc(it.price):""}" placeholder="0 = offert"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label for="f-store">Provenance</label><input id="f-store" value="${esc(it.store||"")}" placeholder="Fnac, Vinted, cadeau…"></div>
+      <div class="field"><label for="f-rating">Ma note /10</label><input id="f-rating" inputmode="numeric" value="${esc(it.rating||"")}"></div>
+    </div>
+    <div class="field"><label for="f-tags">Tags</label><input id="f-tags" value="${esc((it.tags||[]).join(", "))}" placeholder="horreur, à revoir, signé"></div>
+    <div class="field"><label for="f-notes">Mes notes</label><textarea id="f-notes" rows="3">${esc(it.notes||"")}</textarea></div>
+    <div class="field"><label for="f-cover">URL de la jaquette</label><input id="f-cover" value="${esc(it.cover||"")}"></div>
+    <button class="btn" id="f-save">${isNew?"Ajouter à la collection":"Enregistrer"}</button>
+  `);
+
+  const catSel = document.getElementById("f-cat");
+  catSel.innerHTML = Object.entries(CATS).map(([k,v])=>`<option value="${k}"${k===cat?" selected":""}>${v.label}</option>`).join("");
+  function syncCat(){
+    const c = catSel.value;
+    document.getElementById("f-platwrap").style.display = c==="jeu" ? "" : "none";
+    document.getElementById("f-volwrap").style.display  = isVolumes(c) ? "flex" : "none";
+    const ps = document.getElementById("f-progress");
+    ps.innerHTML = `<option value=""></option>` + PROGRESS[c].map(p=>`<option${p===it.progress?" selected":""}>${p}</option>`).join("");
+  }
+  catSel.onchange = syncCat; syncCat();
+
+  document.getElementById("f-save").onclick = ()=>{
+    const v = id => document.getElementById(id).value.trim();
+    if(!v("f-title")) return toast("Il faut au moins un titre");
+    const priceRaw = v("f-price").replace(",",".");
+    const rec = Object.assign({}, it, {
+      id: it.id || uid(),
+      title: v("f-title"), category: catSel.value, year: v("f-year"),
+      status: v("f-status"), progress: v("f-progress"),
+      platform: catSel.value==="jeu" ? v("f-plat") : "",
+      volumes: isVolumes(catSel.value) ? v("f-vol") : "",
+      volumesTotal: isVolumes(catSel.value) ? v("f-voltot") : "",
+      creator: v("f-creator"), publisher: v("f-pub"),
+      format: v("f-format"), edition: v("f-edition"),
+      purchaseDate: v("f-date"),
+      price: priceRaw==="" ? "" : (isNaN(parseFloat(priceRaw)) ? "" : parseFloat(priceRaw)),
+      store: v("f-store"), rating: v("f-rating"),
+      tags: v("f-tags") ? v("f-tags").split(",").map(t=>t.trim()).filter(Boolean) : [],
+      notes: v("f-notes"), cover: v("f-cover"),
+      updatedAt: new Date().toISOString()
+    });
+    if(!it.id){ rec.addedAt = new Date().toISOString(); S.items.push(rec); }
+    else { const i = S.items.findIndex(x=>x.id===it.id); S.items[i] = rec; }
+    save(); closeSheet(); renderAll();
+    toast(it.id ? "Fiche enregistrée" : "Ajouté");
+  };
+}
+
+/* ================= APIs ================= */
+function px(url){
+  const p = (S.settings.proxy||"").trim();
+  return p ? p + encodeURIComponent(url) : url;
+}
+async function getJSON(url){
+  const r = await fetch(px(url));
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+async function apiSearch(cat, q){
+  const c = CATS[cat];
+  if(c.src==="tmdb"){
+    if(!S.settings.tmdb) throw new Error("Clé TMDB manquante (Réglages)");
+    const d = await getJSON(`https://api.themoviedb.org/3/search/${c.tmdbType}?api_key=${encodeURIComponent(S.settings.tmdb)}&language=fr-FR&include_adult=false&query=${encodeURIComponent(q)}`);
+    return (d.results||[]).slice(0,15).map(r=>({
+      title: r.title || r.name,
+      year: (r.release_date || r.first_air_date || "").slice(0,4),
+      cover: r.poster_path ? "https://image.tmdb.org/t/p/w342"+r.poster_path : "",
+      overview: r.overview || "",
+      publisher: ""
+    }));
+  }
+  if(c.src==="jikan"){
+    const d = await getJSON(`https://api.jikan.moe/v4/${c.jikanType}?q=${encodeURIComponent(q)}&limit=15&sfw=true`);
+    return (d.data||[]).map(r=>({
+      title: r.title_english || r.title,
+      year: String(r.year || (r.aired&&r.aired.from||r.published&&r.published.from||"")).slice(0,4),
+      cover: r.images && r.images.jpg ? (r.images.jpg.large_image_url || r.images.jpg.image_url) : "",
+      overview: r.synopsis || "",
+      creator: (r.authors && r.authors[0] && r.authors[0].name) || (r.studios && r.studios[0] && r.studios[0].name) || "",
+      volumesTotal: r.volumes ? String(r.volumes) : ""
+    }));
+  }
+  if(c.src==="books"){
+    const d = await getJSON(`https://www.googleapis.com/books/v1/volumes?maxResults=15&country=FR&q=${encodeURIComponent(q)}`);
+    return (d.items||[]).map(r=>{
+      const v = r.volumeInfo||{};
+      return {
+        title: v.title + (v.subtitle ? " — "+v.subtitle : ""),
+        year: (v.publishedDate||"").slice(0,4),
+        cover: v.imageLinks ? (v.imageLinks.thumbnail||"").replace("http://","https://").replace("&edge=curl","") : "",
+        overview: v.description || "",
+        creator: (v.authors||[]).join(", "),
+        publisher: v.publisher || ""
+      };
+    });
+  }
+  if(c.src==="rawg"){
+    if(!S.settings.rawg) throw new Error("Clé RAWG manquante (Réglages)");
+    const d = await getJSON(`https://api.rawg.io/api/games?key=${encodeURIComponent(S.settings.rawg)}&page_size=15&search=${encodeURIComponent(q)}`);
+    return (d.results||[]).map(r=>({
+      title: r.name,
+      year: (r.released||"").slice(0,4),
+      cover: r.background_image || "",
+      overview: "",
+      platformList: (r.platforms||[]).map(p=>p.platform.name)
+    }));
+  }
+  return [];
+}
+
+/* ================= vue Ajouter ================= */
+let addCat = "film";
+function renderAdd(){
+  document.getElementById("v-add").innerHTML = `
+    <div class="panel">
+      <h2>Chercher dans les bases en ligne</h2>
+      <div class="chips" id="addChips" style="margin-bottom:10px"></div>
+      <div class="row">
+        <input id="addQ" placeholder="Titre…" autocomplete="off" style="flex:3">
+        <button class="btn sm" id="addGo" style="flex:0 0 auto">Chercher</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn sm ghost" id="scanBtn">Scanner un code-barres</button>
+        <button class="btn sm ghost" id="manualBtn">Saisie manuelle</button>
+      </div>
+      <div id="addRes" style="margin-top:12px"></div>
+    </div>
+    <div class="panel">
+      <h2>Import en masse</h2>
+      <p class="note">Colle une liste de titres, un par ligne. Chaque ligne est cherchée automatiquement dans la base de la catégorie choisie ci-dessus. C'est la voie rapide pour transférer ton Excel.</p>
+      <textarea id="bulkTxt" rows="5" style="margin-top:9px" placeholder="Bloodborne&#10;God of War&#10;Gran Turismo 4"></textarea>
+      <button class="btn ghost" id="bulkGo" style="margin-top:9px">Chercher les titres</button>
+      <div id="bulkOut"></div>
+    </div>`;
+  const chips = document.getElementById("addChips");
+  chips.innerHTML = Object.entries(CATS).map(([k,v])=>`<button class="chip" data-c="${k}" aria-pressed="${k===addCat}">${v.label}</button>`).join("");
+  chips.onclick = e => { const b=e.target.closest("[data-c]"); if(!b) return; addCat=b.dataset.c; renderAdd(); };
+  document.getElementById("addGo").onclick = doSearch;
+  document.getElementById("addQ").onkeydown = e => { if(e.key==="Enter") doSearch(); };
+  document.getElementById("manualBtn").onclick = ()=> openForm({category:addCat});
+  document.getElementById("scanBtn").onclick = startScan;
+  document.getElementById("bulkGo").onclick = doBulk;
+}
+
+async function doSearch(){
+  const q = document.getElementById("addQ").value.trim();
+  const out = document.getElementById("addRes");
+  if(!q) return;
+  out.innerHTML = `<p class="note">Recherche…</p>`;
+  try{
+    const res = await apiSearch(addCat, q);
+    if(!res.length){ out.innerHTML = `<p class="note">Aucun résultat. Essaie le titre original, ou passe par la saisie manuelle.</p>`; return; }
+    window._res = res;
+    out.innerHTML = res.map((r,i)=>`
+      <button class="res" data-i="${i}">
+        ${r.cover?`<img src="${esc(r.cover)}" alt="" loading="lazy">`:`<span class="noimg"></span>`}
+        <span><span class="res-t">${esc(r.title)}</span>
+        <span class="res-s">${esc([r.year, r.creator, r.publisher, (r.platformList||[]).slice(0,3).join(", ")].filter(Boolean).join(" · "))}</span></span>
+      </button>`).join("");
+    out.onclick = e => {
+      const b = e.target.closest("[data-i]"); if(!b) return;
+      const r = window._res[+b.dataset.i];
+      openForm(Object.assign({category:addCat}, r, {platformList:undefined}));
+    };
+  }catch(err){
+    out.innerHTML = `<p class="note">Échec de la recherche : ${esc(err.message)}.<br>
+      Si le message parle de CORS ou de réseau, l'API refuse les appels directs depuis le navigateur : renseigne une URL de proxy dans Réglages.</p>`;
+  }
+}
+
+/* ---- import en masse ---- */
+async function doBulk(){
+  const lines = document.getElementById("bulkTxt").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  const out = document.getElementById("bulkOut");
+  if(!lines.length) return;
+  out.innerHTML = `<div class="prog"><i id="bp"></i></div><p class="note" id="bs">0 / ${lines.length}</p>`;
+  const found = [], missing = [];
+  for(let i=0;i<lines.length;i++){
+    try{
+      const r = await apiSearch(addCat, lines[i]);
+      if(r.length) found.push(Object.assign({}, r[0], {_query:lines[i]})); else missing.push(lines[i]);
+    }catch(e){ missing.push(lines[i]); }
+    document.getElementById("bp").style.width = ((i+1)/lines.length*100)+"%";
+    document.getElementById("bs").textContent = `${i+1} / ${lines.length}`;
+    await new Promise(r=>setTimeout(r, 380)); // respect des limites de débit
+  }
+  window._bulk = found;
+  out.innerHTML = `
+    <p class="note" style="margin:10px 0">${found.length} trouvés, ${missing.length} sans résultat. Vérifie avant d'ajouter : le premier résultat n'est pas toujours le bon.</p>
+    ${found.map((r,i)=>`<label class="res" style="cursor:pointer"><input type="checkbox" data-b="${i}" checked style="width:18px;flex:0 0 18px;margin-top:20px">
+      ${r.cover?`<img src="${esc(r.cover)}" alt="">`:`<span class="noimg"></span>`}
+      <span><span class="res-t">${esc(r.title)}</span><span class="res-s">${esc(r.year||"")} · cherché : ${esc(r._query)}</span></span></label>`).join("")}
+    ${missing.length?`<p class="note" style="margin-top:10px">Sans résultat : ${esc(missing.join(", "))}</p>`:""}
+    <button class="btn" id="bulkAdd" style="margin-top:12px">Ajouter la sélection</button>`;
+  document.getElementById("bulkAdd").onclick = ()=>{
+    const picked = [...document.querySelectorAll("[data-b]")].filter(c=>c.checked).map(c=>window._bulk[+c.dataset.b]);
+    picked.forEach(r=>{
+      S.items.push({ id:uid(), category:addCat, status:"collection", format:"Physique", edition:"Standard",
+        title:r.title, year:r.year||"", cover:r.cover||"", overview:r.overview||"", creator:r.creator||"",
+        publisher:r.publisher||"", tags:[], addedAt:new Date().toISOString() });
+    });
+    save(); renderAll(); toast(picked.length+" fiches ajoutées");
+  };
+}
+
+/* ---- scan code-barres ---- */
+async function startScan(){
+  if(!("BarcodeDetector" in window)){
+    sheet("Scanner indisponible", `<p class="note">Ton navigateur ne fournit pas le lecteur de codes-barres (c'est le cas de Safari sur iPhone). Sur Android, utilise Chrome.<br><br>En attendant, tape le code EAN/ISBN à la main :</p>
+      <div class="field" style="margin-top:12px"><label for="isbn">Code EAN / ISBN</label><input id="isbn" inputmode="numeric"></div>
+      <button class="btn" id="isbnGo">Chercher</button><div id="isbnOut"></div>`);
+    document.getElementById("isbnGo").onclick = ()=> lookupISBN(document.getElementById("isbn").value.trim());
+    return;
+  }
+  sheet("Scanner", `<video id="cam" playsinline style="width:100%;border-radius:12px;background:#000"></video>
+    <p class="note" style="margin-top:9px">Vise le code-barres au dos du boîtier.</p>`);
+  let stream;
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+  }catch(e){ sheet("Caméra refusée", `<p class="note">Accès caméra refusé. Autorise-le dans les réglages du navigateur, ou saisis le code à la main.</p>`); return; }
+  const v = document.getElementById("cam"); v.srcObject = stream; await v.play();
+  const det = new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e"]});
+  const stop = ()=> stream.getTracks().forEach(t=>t.stop());
+  document.getElementById("sheet").addEventListener("click", e=>{ if(e.target.dataset.close!==undefined) stop(); }, {once:true});
+  const tick = async ()=>{
+    if(!document.getElementById("cam")) return stop();
+    try{
+      const codes = await det.detect(v);
+      if(codes.length){ stop(); lookupISBN(codes[0].rawValue); return; }
+    }catch(e){}
+    requestAnimationFrame(tick);
+  };
+  tick();
+}
+async function lookupISBN(code){
+  if(!code) return;
+  sheet("Recherche", `<p class="note">Code ${esc(code)} — recherche en cours…</p>`);
+  try{
+    const d = await getJSON(`https://www.googleapis.com/books/v1/volumes?country=FR&q=isbn:${encodeURIComponent(code)}`);
+    if(!d.items || !d.items.length){
+      sheet("Rien trouvé", `<p class="note">Le code ${esc(code)} n'est pas dans Google Books. C'est fréquent pour les jeux et les DVD, dont les EAN ne sont pas couverts. Crée la fiche à la main.</p>
+        <button class="btn" style="margin-top:12px" id="mk">Saisie manuelle</button>`);
+      document.getElementById("mk").onclick = ()=> openForm({category:addCat});
+      return;
+    }
+    const v = d.items[0].volumeInfo||{};
+    openForm({ category:addCat, title:v.title||"", year:(v.publishedDate||"").slice(0,4),
+      creator:(v.authors||[]).join(", "), publisher:v.publisher||"", overview:v.description||"",
+      cover: v.imageLinks ? (v.imageLinks.thumbnail||"").replace("http://","https://") : "" });
+  }catch(e){ sheet("Échec", `<p class="note">${esc(e.message)}</p>`); }
+}
+
+/* ================= prêts ================= */
+function renderLoans(){
+  const out = S.items.filter(i=>i.loan).sort((a,b)=>(a.loan.date||"").localeCompare(b.loan.date||""));
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById("v-loans").innerHTML = out.length ? `
+    <div class="panel"><h2>${out.length} objet${out.length>1?"s":""} chez quelqu'un</h2>
+      ${out.map(it=>{
+        const late = it.loan.due && it.loan.due < today;
+        return `<div class="loan-item">
+          ${it.cover?`<img src="${esc(it.cover)}" alt="">`:`<span class="noimg"></span>`}
+          <span class="t"><b>${esc(it.title)}</b>
+          <span class="${late?"late":""}">${esc(it.loan.to)} · depuis le ${esc(fmtDate(it.loan.date))}${it.loan.due?(late?" · en retard":" · retour le "+esc(fmtDate(it.loan.due))):""}</span></span>
+          <button class="btn sm ghost" data-act="return" data-id="${it.id}">Rendu</button>
+        </div>`;}).join("")}
+    </div>` : `<div class="empty"><strong>Aucun prêt en cours</strong>Ouvre une fiche pour noter à qui tu la prêtes.</div>`;
+  const hist = S.items.flatMap(i=>(i.loanHistory||[]).map(h=>({t:i.title,...h}))).sort((a,b)=>(b.back||"").localeCompare(a.back||"")).slice(0,15);
+  if(hist.length){
+    document.getElementById("v-loans").innerHTML += `<div class="panel"><h2>Historique</h2>${
+      hist.map(h=>`<p class="note">${esc(h.t)} — ${esc(h.to)}, rendu le ${esc(fmtDate(h.back))}</p>`).join("")}</div>`;
+  }
+}
+function lend(id){
+  const to = (document.getElementById("lto")||{}).value?.trim();
+  if(!to) return toast("Indique à qui tu prêtes");
+  const it = S.items.find(x=>x.id===id);
+  it.loan = { to, date:new Date().toISOString().slice(0,10), due:(document.getElementById("ldue")||{}).value||"" };
+  save(); closeSheet(); renderAll(); toast("Prêt enregistré");
+}
+function giveBack(id){
+  const it = S.items.find(x=>x.id===id); if(!it||!it.loan) return;
+  it.loanHistory = it.loanHistory || [];
+  it.loanHistory.push({ to:it.loan.to, date:it.loan.date, back:new Date().toISOString().slice(0,10) });
+  it.loan = null; save(); closeSheet(); renderAll(); toast("Rendu");
+}
+
+/* ================= stats ================= */
+function renderStats(){
+  const own = S.items.filter(i=>i.status==="collection");
+  const wish = S.items.filter(i=>i.status==="wishlist");
+  const backlog = own.filter(i=>/^(Backlog|À voir|À lire)$/.test(i.progress||""));
+  const done = own.filter(i=>/^(Terminé|100 %|Vu|Lu|À jour)$/.test(i.progress||""));
+  const spent = own.reduce((s,i)=>s+(typeof i.price==="number"?i.price:0),0);
+  const byCat = tally(own, i=>CATS[i.category]?.label||"?");
+  const byPlat = tally(own.filter(i=>i.platform), i=>i.platform);
+  const byYear = tally(own.filter(i=>i.purchaseDate), i=>i.purchaseDate.slice(0,4));
+  const byFmt = tally(own, i=>i.format||"—");
+
+  document.getElementById("v-stats").innerHTML = `
+    <div class="big">
+      <div class="stat"><b>${own.length}</b><span>dans la collection</span></div>
+      <div class="stat"><b>${backlog.length}</b><span>jamais commencés</span></div>
+      <div class="stat"><b>${done.length}</b><span>terminés</span></div>
+      <div class="stat"><b>${wish.length}</b><span>en liste d'envies</span></div>
+    </div>
+    <div class="panel"><h2>Dépenses saisies</h2>
+      <p style="font-size:24px;font-weight:700;margin:0">${spent.toFixed(2).replace(".",",")} €</p>
+      <p class="note">Sur ${own.filter(i=>typeof i.price==="number").length} fiches où tu as noté un prix. Le reste n'est pas compté.</p>
+    </div>
+    ${bars("Par catégorie", byCat)}
+    ${byPlat.length?bars("Par plateforme", byPlat):""}
+    ${byYear.length?bars("Achats par année", byYear.sort((a,b)=>a[0].localeCompare(b[0]))):""}
+    ${bars("Physique ou numérique", byFmt)}`;
+}
+function tally(arr, fn){
+  const m = new Map();
+  arr.forEach(x=>{ const k=fn(x); m.set(k,(m.get(k)||0)+1); });
+  return [...m.entries()].sort((a,b)=>b[1]-a[1]);
+}
+function bars(title, rows){
+  if(!rows.length) return "";
+  const max = Math.max(...rows.map(r=>r[1]));
+  return `<div class="panel"><h2>${esc(title)}</h2><div class="bars">${
+    rows.map(([k,n])=>`<div class="bar-row"><span class="lab">${esc(k)}</span><span class="bar"><i style="width:${n/max*100}%"></i></span><span class="n">${n}</span></div>`).join("")}</div></div>`;
+}
+
+/* ================= réglages ================= */
+function renderSettings(){
+  document.getElementById("v-set").innerHTML = `
+    <div class="panel"><h2>Clés d'API</h2>
+      <p class="note">Elles restent sur cet appareil et ne sont envoyées qu'aux services concernés. Les comptes sont gratuits.</p>
+      <div class="field" style="margin-top:11px"><label for="s-tmdb">TMDB — films et séries</label><input id="s-tmdb" value="${esc(S.settings.tmdb)}" placeholder="clé v3"></div>
+      <div class="field"><label for="s-rawg">RAWG — jeux vidéo</label><input id="s-rawg" value="${esc(S.settings.rawg)}" placeholder="clé API"></div>
+      <div class="field"><label for="s-proxy">Proxy (optionnel)</label><input id="s-proxy" value="${esc(S.settings.proxy)}" placeholder="https://mon-proxy/?url="></div>
+      <p class="note">Animés, manga, livres, BD et comics ne demandent aucune clé. Le proxy ne sert que si une API refuse les appels directs depuis le navigateur : l'URL de l'API y est ajoutée à la fin, encodée.</p>
+      <button class="btn" id="s-save" style="margin-top:11px">Enregistrer les clés</button>
+    </div>
+    <div class="panel"><h2>Sauvegarde</h2>
+      <p class="note">Tes données vivent dans ce navigateur. Vider les données du site les efface. Exporte régulièrement.</p>
+      <div class="stack" style="margin-top:11px">
+        <button class="btn ghost" id="s-exp">Exporter en JSON</button>
+        <button class="btn ghost" id="s-csv">Exporter en CSV</button>
+        <button class="btn ghost" id="s-imp">Importer un JSON</button>
+        <input type="file" id="s-file" accept="application/json" style="display:none">
+      </div>
+    </div>
+    <div class="panel"><h2>Importer depuis Plex</h2>
+      <p class="note">Récupère les films et séries de ton serveur, avec jaquettes et statut vu/non vu. Relancer l'import met à jour l'avancement sans créer de doublons.</p>
+      <div class="field" style="margin-top:11px"><label for="p-url">Adresse du serveur</label><input id="p-url" value="${esc(S.settings.plexUrl||"")}" placeholder="http://192.168.1.20:32400"></div>
+      <div class="field"><label for="p-tok">Token (X-Plex-Token)</label><input id="p-tok" value="${esc(S.settings.plexToken||"")}"></div>
+      <button class="btn ghost" id="p-go">Lister les bibliothèques</button>
+      <div id="plexOut"></div>
+    </div>
+    <div class="panel"><h2>Importer un CSV</h2>
+      <p class="note">Colonnes reconnues : titre, categorie, plateforme, annee, statut, format, avancement, date, prix, note, tomes, auteur, editeur, tags. Seule « titre » est obligatoire. Le séparateur peut être une virgule ou un point-virgule.</p>
+      <textarea id="csvTxt" rows="4" style="margin-top:9px" placeholder="titre;categorie;plateforme&#10;Bloodborne;jeu;PS4"></textarea>
+      <button class="btn ghost" id="csvGo" style="margin-top:9px">Importer</button>
+    </div>
+    <div class="panel"><h2>Zone rouge</h2>
+      <button class="btn danger" id="s-wipe">Tout effacer</button>
+    </div>`;
+  document.getElementById("s-save").onclick = ()=>{
+    S.settings.tmdb = document.getElementById("s-tmdb").value.trim();
+    S.settings.rawg = document.getElementById("s-rawg").value.trim();
+    S.settings.proxy = document.getElementById("s-proxy").value.trim();
+    save(); toast("Clés enregistrées");
+  };
+  document.getElementById("s-exp").onclick = ()=> download("collection.json", JSON.stringify(S,null,2), "application/json");
+  document.getElementById("s-csv").onclick = exportCSV;
+  document.getElementById("s-imp").onclick = ()=> document.getElementById("s-file").click();
+  document.getElementById("s-file").onchange = e=>{
+    const f = e.target.files[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = ()=>{
+      try{
+        const d = JSON.parse(r.result);
+        if(!Array.isArray(d.items)) throw new Error("pas de liste d'objets");
+        S.items = d.items; S.settings = Object.assign(S.settings, d.settings||{});
+        save(); renderAll(); toast(S.items.length+" fiches restaurées");
+      }catch(err){ toast("Fichier illisible : "+err.message); }
+    };
+    r.readAsText(f);
+  };
+  document.getElementById("csvGo").onclick = importCSV;
+  document.getElementById("p-go").onclick = plexSections;
+  document.getElementById("s-wipe").onclick = ()=>{
+    if(!confirm("Effacer les "+S.items.length+" fiches ? Irréversible.")) return;
+    S.items = []; save(); renderAll(); toast("Collection vidée");
+  };
+}
+function download(name, text, type){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text],{type}));
+  a.download = name; a.click(); URL.revokeObjectURL(a.href);
+}
+const CSV_COLS = ["title","category","platform","year","status","format","progress","purchaseDate","price","rating","volumes","creator","publisher","tags"];
+const CSV_HEAD = ["titre","categorie","plateforme","annee","statut","format","avancement","date","prix","note","tomes","auteur","editeur","tags"];
+function exportCSV(){
+  const q = v => `"${String(v==null?"":Array.isArray(v)?v.join("|"):v).replace(/"/g,'""')}"`;
+  const rows = [CSV_HEAD.join(";")].concat(S.items.map(i=>CSV_COLS.map(c=>q(i[c])).join(";")));
+  download("collection.csv", "\uFEFF"+rows.join("\n"), "text/csv");
+}
+function importCSV(){
+  const txt = document.getElementById("csvTxt").value.trim();
+  if(!txt) return;
+  const lines = txt.split(/\r?\n/).filter(Boolean);
+  const sep = (lines[0].match(/;/g)||[]).length >= (lines[0].match(/,/g)||[]).length ? ";" : ",";
+  const head = lines[0].split(sep).map(h=>h.trim().toLowerCase().replace(/^"|"$/g,""));
+  const idx = {};
+  CSV_HEAD.forEach((h,i)=>{ const p = head.indexOf(h); if(p>-1) idx[CSV_COLS[i]] = p; });
+  if(idx.title===undefined) return toast("Colonne « titre » introuvable en première ligne");
+  let n = 0;
+  lines.slice(1).forEach(l=>{
+    const cells = l.split(sep).map(c=>c.trim().replace(/^"|"$/g,"").replace(/""/g,'"'));
+    const title = cells[idx.title]; if(!title) return;
+    const rec = { id:uid(), status:"collection", format:"Physique", edition:"Standard", category:"film", tags:[], addedAt:new Date().toISOString() };
+    Object.entries(idx).forEach(([k,p])=>{
+      let v = cells[p]||"";
+      if(k==="tags") v = v ? v.split("|").map(s=>s.trim()).filter(Boolean) : [];
+      if(k==="price") v = v ? parseFloat(v.replace(",",".")) : "";
+      if(k==="category") v = CATS[v] ? v : (Object.entries(CATS).find(([,c])=>c.label.toLowerCase()===v.toLowerCase())||["film"])[0];
+      rec[k] = v;
+    });
+    if(!CATS[rec.category]) rec.category = "film";
+    S.items.push(rec); n++;
+  });
+  save(); renderAll(); toast(n+" fiches importées");
+}
+
+/* ================= Plex ================= */
+function plexBase(){ return (S.settings.plexUrl||"").trim().replace(/\/+$/,""); }
+async function plexFetch(path){
+  const base = plexBase(), tok = (S.settings.plexToken||"").trim();
+  const url = base + path + (path.includes("?") ? "&" : "?") + "X-Plex-Token=" + encodeURIComponent(tok);
+  let r;
+  try { r = await fetch(url, {headers:{Accept:"application/json"}}); }
+  catch(e){
+    if(location.protocol==="https:" && /^http:/.test(base))
+      throw new Error("page en HTTPS, serveur en HTTP : le navigateur bloque. Utilise l'adresse https://…plex.direct:32400 de ton serveur, ou ouvre cette app en HTTP.");
+    throw new Error("serveur injoignable. Vérifie l'adresse et que tu es sur le même réseau.");
+  }
+  if(r.status===401) throw new Error("token refusé (401). Il a expiré : récupère-en un nouveau via « Afficher le XML » dans Plex.");
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return r.json();
+}
+async function plexSections(){
+  S.settings.plexUrl = document.getElementById("p-url").value.trim();
+  S.settings.plexToken = document.getElementById("p-tok").value.trim();
+  save();
+  const out = document.getElementById("plexOut");
+  if(!S.settings.plexUrl || !S.settings.plexToken){ out.innerHTML = `<p class="note" style="margin-top:10px">Il faut l'adresse et le token.</p>`; return; }
+  out.innerHTML = `<p class="note" style="margin-top:10px">Connexion…</p>`;
+  try{
+    const d = await plexFetch("/library/sections");
+    const dirs = ((d.MediaContainer||{}).Directory||[]).filter(s=>s.type==="movie"||s.type==="show");
+    if(!dirs.length){ out.innerHTML = `<p class="note" style="margin-top:10px">Aucune bibliothèque de films ou de séries trouvée.</p>`; return; }
+    out.innerHTML = `
+      <p class="note" style="margin:12px 0 8px">Choisis quoi importer et dans quelle catégorie. Les séries d'animation vont dans « Animés » si tu le règles ici.</p>
+      ${dirs.map(s=>`<div class="row" style="align-items:flex-end;margin-bottom:9px">
+        <label style="flex:0 0 24px;margin:0"><input type="checkbox" data-sec="${esc(s.key)}" checked style="width:18px"></label>
+        <div style="flex:2"><label>${esc(s.title)}</label>
+        <select data-map="${esc(s.key)}">
+          ${s.type==="movie"
+            ? `<option value="film">Films</option><option value="anime">Animés</option>`
+            : `<option value="serie">Séries</option><option value="anime">Animés</option>`}
+        </select></div>
+      </div>`).join("")}
+      <button class="btn" id="p-imp" style="margin-top:6px">Importer</button>
+      <div id="plexProg"></div>`;
+    document.getElementById("p-imp").onclick = ()=>plexImport(dirs);
+  }catch(e){ out.innerHTML = `<p class="note" style="margin-top:10px">Échec : ${esc(e.message)}</p>`; }
+}
+async function plexImport(dirs){
+  const picked = dirs.filter(s=>{
+    const c = document.querySelector(`[data-sec="${CSS.escape(s.key)}"]`);
+    return c && c.checked;
+  }).map(s=>({ key:s.key, title:s.title, cat: document.querySelector(`[data-map="${CSS.escape(s.key)}"]`).value }));
+  if(!picked.length) return toast("Aucune bibliothèque cochée");
+  const prog = document.getElementById("plexProg");
+  prog.innerHTML = `<div class="prog"><i id="pp"></i></div><p class="note" id="ps">…</p>`;
+  const base = plexBase(), tok = encodeURIComponent((S.settings.plexToken||"").trim());
+  let added = 0, updated = 0;
+  for(let i=0;i<picked.length;i++){
+    const s = picked[i];
+    document.getElementById("ps").textContent = `Lecture de « ${s.title} »…`;
+    let meta = [];
+    try{ meta = ((await plexFetch(`/library/sections/${encodeURIComponent(s.key)}/all`)).MediaContainer||{}).Metadata||[]; }
+    catch(e){ prog.innerHTML = `<p class="note">Échec sur « ${esc(s.title)} » : ${esc(e.message)}</p>`; return; }
+    meta.forEach(m=>{
+      const progress = m.type==="show"
+        ? (m.leafCount && m.viewedLeafCount >= m.leafCount ? "Terminé" : m.viewedLeafCount ? "En cours" : "À voir")
+        : (m.viewCount ? "Vu" : "À voir");
+      const existing = S.items.find(x => x.plexKey === String(m.ratingKey))
+        || S.items.find(x => x.category===s.cat && (x.title||"").toLowerCase()===(m.title||"").toLowerCase() && String(x.year||"")===String(m.year||""));
+      if(existing){
+        existing.plexKey = String(m.ratingKey);
+        existing.progress = progress;
+        if(!existing.cover && m.thumb) existing.cover = base + m.thumb + "?X-Plex-Token=" + tok;
+        updated++; return;
+      }
+      S.items.push({
+        id: uid(), category: s.cat, status: "collection",
+        title: m.title || "", year: m.year ? String(m.year) : "",
+        cover: m.thumb ? base + m.thumb + "?X-Plex-Token=" + tok : "",
+        overview: m.summary || "", creator: m.director ? m.director.map(d=>d.tag).join(", ") : "",
+        format: "Numérique", edition: "Standard", progress,
+        store: "Plex", tags: ["plex"], plexKey: String(m.ratingKey),
+        addedAt: new Date().toISOString()
+      });
+      added++;
+    });
+    document.getElementById("pp").style.width = ((i+1)/picked.length*100)+"%";
+  }
+  save(); renderAll();
+  toast(`${added} ajoutés, ${updated} mis à jour`);
+}
+
+/* ================= sheet, toast, nav ================= */
+const sheetEl = document.getElementById("sheet");
+function sheet(title, html){
+  document.getElementById("sheetTitle").textContent = title;
+  document.getElementById("sheetContent").innerHTML = html;
+  sheetEl.classList.add("on");
+  document.body.style.overflow = "hidden";
+}
+function closeSheet(){ sheetEl.classList.remove("on"); document.body.style.overflow = ""; }
+sheetEl.addEventListener("click", e=>{ if(e.target.dataset.close!==undefined) closeSheet(); });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeSheet(); });
+
+let toastT;
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove("on"), 2200);
+}
+
+const VIEWS = [
+  ["lib","Bibliothèque",'<path d="M4 19V6a2 2 0 0 1 2-2h3v15H6a2 2 0 0 1-2-2Z"/><path d="M9 4h4v15H9z"/><path d="m14.5 5.5 3.5 1-3 13"/>'],
+  ["add","Ajouter",'<circle cx="12" cy="12" r="8.5"/><path d="M12 8.5v7M8.5 12h7"/>'],
+  ["loans","Prêts",'<path d="M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-7"/><path d="M3 8h18v4H3z"/><path d="M12 20V8"/><path d="M12 8s-3.5-4.5-5.5-2.5S9 8 12 8s5.5-4.5 3.5-2.5"/>'],
+  ["stats","Stats",'<path d="M5 19V11M12 19V5M19 19v-6"/>'],
+  ["set","Réglages",'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 9 2.5h.1A2 2 0 1 1 13 2.5V3a1.6 1.6 0 0 0 2.7 1.1"/>']
+];
+let cur = "lib";
+document.getElementById("nav").innerHTML = VIEWS.map(([k,l,p])=>
+  `<button data-v="${k}" class="${k===cur?"on":""}"><svg viewBox="0 0 24 24">${p}</svg>${l}</button>`).join("");
+document.getElementById("nav").onclick = e=>{ const b=e.target.closest("[data-v]"); if(b) go(b.dataset.v); };
+
+function go(v){
+  cur = v;
+  document.querySelectorAll(".view").forEach(s=>s.classList.toggle("on", s.id==="v-"+v));
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("on", b.dataset.v===v));
+  document.getElementById("libControls").style.display = v==="lib" ? "" : "none";
+  document.getElementById("viewTitle").textContent = VIEWS.find(x=>x[0]===v)[1];
+  document.getElementById("viewCount").textContent = "";
+  window.scrollTo(0,0);
+  if(v==="lib") renderLib();
+  if(v==="add") renderAdd();
+  if(v==="loans") renderLoans();
+  if(v==="stats") renderStats();
+  if(v==="set") renderSettings();
+}
+
+/* ================= filtres UI ================= */
+document.getElementById("catChips").innerHTML =
+  `<button class="chip" data-cat="all" aria-pressed="true">Tout</button>` +
+  Object.entries(CATS).map(([k,v])=>`<button class="chip" data-cat="${k}" aria-pressed="false">${v.label}</button>`).join("");
+document.getElementById("statChips").innerHTML =
+  [["collection","Ma collection"],["wishlist","Envies"],["backlog","Pas commencés"],["loaned","Prêtés"],["all","Tout"]]
+  .map(([k,l])=>`<button class="chip" data-stat="${k}" aria-pressed="${k==="collection"}">${l}</button>`).join("");
+document.getElementById("catChips").onclick = e=>{
+  const b = e.target.closest("[data-cat]"); if(!b) return;
+  F.cat = b.dataset.cat;
+  document.querySelectorAll("[data-cat]").forEach(x=>x.setAttribute("aria-pressed", x===b));
+  renderLib();
+};
+document.getElementById("statChips").onclick = e=>{
+  const b = e.target.closest("[data-stat]"); if(!b) return;
+  F.stat = b.dataset.stat;
+  document.querySelectorAll("[data-stat]").forEach(x=>x.setAttribute("aria-pressed", x===b));
+  renderLib();
+};
+let qT;
+document.getElementById("q").oninput = e=>{ clearTimeout(qT); qT = setTimeout(()=>{ F.q = e.target.value.trim(); renderLib(); }, 160); };
+
+/* ================= actions déléguées ================= */
+document.addEventListener("click", e=>{
+  const card = e.target.closest(".card");
+  if(card) return openItem(card.dataset.id);
+  const a = e.target.closest("[data-act]"); if(!a) return;
+  const id = a.dataset.id;
+  const it = S.items.find(x=>x.id===id);
+  switch(a.dataset.act){
+    case "edit": openForm(it); break;
+    case "del":
+      if(confirm("Supprimer « "+it.title+" » ?")){ S.items = S.items.filter(x=>x.id!==id); save(); closeSheet(); renderAll(); toast("Supprimé"); }
+      break;
+    case "acquire":
+      it.status = "collection"; it.purchaseDate = it.purchaseDate || new Date().toISOString().slice(0,10);
+      save(); closeSheet(); renderAll(); toast("Passé dans la collection"); break;
+    case "lend": lend(id); break;
+    case "return": giveBack(id); break;
+  }
+});
+
+function renderAll(){ go(cur); }
+
+/* ================= démarrage ================= */
+load();
+try{ localStorage.setItem("__t","1"); localStorage.removeItem("__t"); }
+catch(e){ setTimeout(()=>toast("Stockage bloqué : les données ne survivront pas à la fermeture. Télécharge le fichier et ouvre-le depuis ton navigateur."), 900); }
+go("lib");
+</script>
+</body>
+</html>
