@@ -757,7 +757,7 @@ function renderSettings(){
       <p class="note">Récupère les films et séries de ton serveur, avec jaquettes et statut vu/non vu. Relancer l'import met à jour l'avancement sans créer de doublons.</p>
       <div class="field" style="margin-top:11px"><label for="p-url">Adresse du serveur</label><input id="p-url" value="${esc(S.settings.plexUrl||"")}" placeholder="http://192.168.1.20:32400"></div>
       <div class="field"><label for="p-tok">Token (X-Plex-Token)</label><input id="p-tok" value="${esc(S.settings.plexToken||"")}"></div>
-      <button class="btn ghost" id="p-go">Lister les bibliothèques</button>
+      <div class="row"><button class="btn ghost" id="p-find">Détecter mon serveur</button><button class="btn ghost" id="p-go">Lister les bibliothèques</button></div>
       <div id="plexOut"></div>
     </div>
     <div class="panel"><h2>Importer un CSV</h2>
@@ -792,6 +792,7 @@ function renderSettings(){
   };
   document.getElementById("csvGo").onclick = importCSV;
   document.getElementById("p-go").onclick = plexSections;
+  document.getElementById("p-find").onclick = plexDiscover;
   document.getElementById("s-wipe").onclick = ()=>{
     if(!confirm("Effacer les "+S.items.length+" fiches ? Irréversible.")) return;
     S.items = []; save(); renderAll(); toast("Collection vidée");
@@ -851,6 +852,54 @@ async function plexFetch(path){
   if(r.status===401) throw new Error("token refusé (401). Il a expiré : récupère-en un nouveau via « Afficher le XML » dans Plex.");
   if(!r.ok) throw new Error("HTTP "+r.status);
   return r.json();
+}
+async function plexDiscover(){
+  S.settings.plexToken = document.getElementById("p-tok").value.trim();
+  save();
+  const out = document.getElementById("plexOut");
+  const tok = S.settings.plexToken;
+  if(!tok){ out.innerHTML = `<p class="note" style="margin-top:10px">Colle d'abord ton token.</p>`; return; }
+  out.innerHTML = `<p class="note" style="margin-top:10px">Interrogation de plex.tv…</p>`;
+  let res;
+  try{
+    if(!S.settings.clientId){ S.settings.clientId = "macollection-" + uid(); save(); }
+    const cid = S.settings.clientId;
+    const r = await fetch(`https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1&X-Plex-Token=${encodeURIComponent(tok)}&X-Plex-Client-Identifier=${encodeURIComponent(cid)}`, {headers:{Accept:"application/json"}});
+    if(r.status===401) throw new Error("token refusé. Récupères-en un nouveau via « Afficher le XML » dans Plex.");
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    res = await r.json();
+  }catch(e){
+    out.innerHTML = `<p class="note" style="margin-top:10px">Détection impossible : ${esc(e.message)}<br><br>
+      Fais-le à la main : ouvre <code>https://plex.tv/api/resources?X-Plex-Token=TONTOKEN</code> dans ton navigateur, trouve ton serveur, et copie l'attribut <code>uri</code> d'une ligne Connection qui finit par <code>plex.direct:32400</code>. Il y en a une pour chez toi (local="1") et une pour l'extérieur.</p>`;
+    return;
+  }
+  const servers = (Array.isArray(res)?res:[]).filter(s=>s.provides && s.provides.includes("server"));
+  if(!servers.length){ out.innerHTML = `<p class="note" style="margin-top:10px">Aucun serveur rattaché à ce compte.</p>`; return; }
+  const cands = [];
+  servers.forEach(s=>(s.connections||[]).forEach(c=>cands.push({
+    name: s.name, uri: c.uri, local: !!c.local, relay: !!c.relay, https: /^https:/.test(c.uri||"")
+  })));
+  const secure = location.protocol === "https:";
+  cands.sort((a,b)=>
+    (secure ? (b.https - a.https) : 0) ||
+    (a.relay - b.relay) ||
+    (b.local - a.local));
+  out.innerHTML = `<p class="note" style="margin-top:10px">${cands.length} adresses trouvées, test en cours…</p>`;
+  for(const c of cands){
+    if(secure && !c.https) continue;
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), 4000);
+    try{
+      const r = await fetch(c.uri + "/identity?X-Plex-Token=" + encodeURIComponent(tok), {signal:ctrl.signal, headers:{Accept:"application/json"}});
+      clearTimeout(t);
+      if(!r.ok) continue;
+      S.settings.plexUrl = c.uri; save();
+      document.getElementById("p-url").value = c.uri;
+      out.innerHTML = `<p class="note" style="margin-top:10px">Connecté à « ${esc(c.name)} » via ${c.local?"ton réseau local":(c.relay?"le relais Plex":"ton accès distant")}.<br><code>${esc(c.uri)}</code></p>`;
+      return plexSections();
+    }catch(e){ clearTimeout(t); }
+  }
+  out.innerHTML = `<p class="note" style="margin-top:10px">Aucune des ${cands.length} adresses ne répond${secure?" en HTTPS":""}. Si tu es hors de chez toi, vérifie que l'accès à distance est bien actif ; si tu es chez toi, que ton téléphone est sur le même wifi.</p>`;
 }
 async function plexSections(){
   S.settings.plexUrl = document.getElementById("p-url").value.trim();
