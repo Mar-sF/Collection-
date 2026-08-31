@@ -508,7 +508,7 @@ function openForm(it){
 }
 
 /* ================= APIs ================= */
-const PROXIED = ["api.rawg.io","api.steampowered.com","store.steampowered.com"];
+const PROXIED = ["api.rawg.io","api.steampowered.com","store.steampowered.com","comicvine.gamespot.com"];
 function px(url){
   const p = (S.settings.proxy||"").trim();
   if(!p) return url;
@@ -521,7 +521,8 @@ async function getJSON(url, tries){
   for(let i=0;i<max;i++){
     try{
       const r = await fetch(px(url));
-      if(r.status===429 || r.status>=500){ last = new Error("HTTP "+r.status); }
+      if(r.status===429){ throw new Error("HTTP 429 (quota atteint)"); }
+      if(r.status>=500){ last = new Error("HTTP "+r.status); }
       else if(!r.ok) throw new Error("HTTP "+r.status);
       else return r.json();
     }catch(e){ last = e; }
@@ -596,18 +597,48 @@ async function apiSearch(cat, q){
     throw new Error("les trois sources sont injoignables pour le moment");
   }
   if(c.src==="books"){
-    const d = await getJSON(`https://www.googleapis.com/books/v1/volumes?maxResults=15&country=FR&q=${encodeURIComponent(q)}`);
-    return (d.items||[]).map(r=>{
-      const v = r.volumeInfo||{};
-      return {
-        title: v.title + (v.subtitle ? " — "+v.subtitle : ""),
-        year: (v.publishedDate||"").slice(0,4),
-        cover: v.imageLinks ? (v.imageLinks.thumbnail||"").replace("http://","https://").replace("&edge=curl","") : "",
-        overview: v.description || "",
-        creator: (v.authors||[]).join(", "),
-        publisher: v.publisher || ""
-      };
-    });
+    const errs = [];
+    // 1. ComicVine, si une clé est renseignée et qu'il s'agit de bandes dessinées
+    if(S.settings.comicvine && (cat==="comic" || cat==="bd")){
+      try{
+        const d = await getJSON(`https://comicvine.gamespot.com/api/search/?api_key=${encodeURIComponent(S.settings.comicvine)}&format=json&resources=volume&limit=15&query=${encodeURIComponent(q)}`, 1);
+        const r = (d.results||[]).map(v=>({
+          title: v.name || "",
+          year: v.start_year ? String(v.start_year) : "",
+          cover: (v.image && (v.image.medium_url || v.image.original_url)) || "",
+          overview: (v.deck || "").replace(/<[^>]+>/g," ").trim(),
+          publisher: (v.publisher && v.publisher.name) || "",
+          volumesTotal: v.count_of_issues ? String(v.count_of_issues) : ""
+        }));
+        if(r.length) return r;
+      }catch(e){ errs.push("ComicVine : "+e.message); }
+    }
+    // 2. Google Books, avec clé si disponible
+    try{
+      const k = S.settings.gbooks ? "&key="+encodeURIComponent(S.settings.gbooks) : "";
+      const d = await getJSON(`https://www.googleapis.com/books/v1/volumes?maxResults=15&country=FR${k}&q=${encodeURIComponent(q)}`, 1);
+      const r = (d.items||[]).map(x=>{
+        const v = x.volumeInfo||{};
+        return { title: v.title + (v.subtitle ? " — "+v.subtitle : ""),
+          year:(v.publishedDate||"").slice(0,4),
+          cover: v.imageLinks ? (v.imageLinks.thumbnail||"").replace("http://","https://").replace("&edge=curl","") : "",
+          overview:v.description||"", creator:(v.authors||[]).join(", "), publisher:v.publisher||"" };
+      });
+      if(r.length) return r;
+    }catch(e){ errs.push("Google Books : "+e.message); }
+    // 3. Open Library, sans clé ni quota strict
+    try{
+      const d = await getJSON(`https://openlibrary.org/search.json?limit=15&fields=title,first_publish_year,author_name,publisher,cover_i&q=${encodeURIComponent(q)}`, 2);
+      const r = (d.docs||[]).map(x=>({
+        title: x.title || "",
+        year: x.first_publish_year ? String(x.first_publish_year) : "",
+        cover: x.cover_i ? `https://covers.openlibrary.org/b/id/${x.cover_i}-M.jpg` : "",
+        overview: "", creator:(x.author_name||[]).join(", "), publisher:(x.publisher||[])[0]||""
+      }));
+      if(r.length) return r;
+    }catch(e){ errs.push("Open Library : "+e.message); }
+    if(errs.length) throw new Error(errs.join(" · "));
+    return [];
   }
   if(c.src==="rawg"){
     if(!S.settings.rawg) throw new Error("Clé RAWG manquante (Réglages)");
@@ -922,6 +953,8 @@ function renderSettings(){
       <p class="note">Elles restent sur cet appareil et ne sont envoyées qu'aux services concernés. Les comptes sont gratuits.</p>
       <div class="field" style="margin-top:11px"><label for="s-tmdb">TMDB — films et séries</label><input id="s-tmdb" value="${esc(S.settings.tmdb)}" placeholder="clé v3"></div>
       <div class="field"><label for="s-rawg">RAWG — jeux vidéo</label><input id="s-rawg" value="${esc(S.settings.rawg)}" placeholder="clé API"></div>
+      <div class="field"><label for="s-gbooks">Google Books (optionnel, lève le quota)</label><input id="s-gbooks" value="${esc(S.settings.gbooks||"")}" placeholder="clé Google Cloud"></div>
+      <div class="field"><label for="s-cv">ComicVine (optionnel, comics et BD)</label><input id="s-cv" value="${esc(S.settings.comicvine||"")}" placeholder="clé ComicVine"></div>
       <div class="field"><label for="s-proxy">Proxy (optionnel)</label><input id="s-proxy" value="${esc(S.settings.proxy)}" placeholder="https://mon-proxy/?url="></div>
       <p class="note">Animés, manga, livres, BD et comics ne demandent aucune clé. Le proxy ne sert que si une API refuse les appels directs depuis le navigateur : l'URL de l'API y est ajoutée à la fin, encodée.</p>
       <button class="btn" id="s-save" style="margin-top:11px">Enregistrer les clés</button>
@@ -961,6 +994,8 @@ function renderSettings(){
   document.getElementById("s-save").onclick = ()=>{
     S.settings.tmdb = document.getElementById("s-tmdb").value.trim();
     S.settings.rawg = document.getElementById("s-rawg").value.trim();
+    S.settings.gbooks = document.getElementById("s-gbooks").value.trim();
+    S.settings.comicvine = document.getElementById("s-cv").value.trim();
     S.settings.proxy = document.getElementById("s-proxy").value.trim();
     save(); toast("Clés enregistrées");
   };
