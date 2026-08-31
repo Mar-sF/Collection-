@@ -465,10 +465,42 @@ function px(url){
   try { if(!PROXIED.includes(new URL(url).hostname)) return url; } catch(e){ return url; }
   return p + encodeURIComponent(url);
 }
-async function getJSON(url){
-  const r = await fetch(px(url));
-  if(!r.ok) throw new Error("HTTP " + r.status);
-  return r.json();
+async function getJSON(url, tries){
+  const max = tries || 3;
+  let last;
+  for(let i=0;i<max;i++){
+    try{
+      const r = await fetch(px(url));
+      if(r.status===429 || r.status>=500){ last = new Error("HTTP "+r.status); }
+      else if(!r.ok) throw new Error("HTTP "+r.status);
+      else return r.json();
+    }catch(e){ last = e; }
+    if(i < max-1) await new Promise(r=>setTimeout(r, 700*(i+1)));
+  }
+  throw last;
+}
+
+/* AniList : GraphQL public, sans clé */
+async function anilistSearch(type, q){
+  const query = `query($q:String,$t:MediaType){Page(perPage:15){media(search:$q,type:$t,sort:SEARCH_MATCH){
+    title{romaji english} startDate{year} coverImage{large} description volumes chapters
+    staff(perPage:2){nodes{name{full}}}}}}`;
+  const r = await fetch("https://graphql.anilist.co", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", Accept:"application/json" },
+    body: JSON.stringify({ query, variables:{ q, t:type } })
+  });
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  const d = await r.json();
+  if(d.errors) throw new Error("AniList a refusé la requête");
+  return (((d.data||{}).Page||{}).media||[]).map(m=>({
+    title: m.title.english || m.title.romaji,
+    year: m.startDate && m.startDate.year ? String(m.startDate.year) : "",
+    cover: (m.coverImage||{}).large || "",
+    overview: (m.description||"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim(),
+    creator: ((m.staff||{}).nodes||[]).map(n=>n.name.full).join(", "),
+    volumesTotal: m.volumes ? String(m.volumes) : ""
+  }));
 }
 
 async function apiSearch(cat, q){
@@ -485,15 +517,33 @@ async function apiSearch(cat, q){
     }));
   }
   if(c.src==="jikan"){
-    const d = await getJSON(`https://api.jikan.moe/v4/${c.jikanType}?q=${encodeURIComponent(q)}&limit=15&sfw=true`);
-    return (d.data||[]).map(r=>({
-      title: r.title_english || r.title,
-      year: String(r.year || (r.aired&&r.aired.from||r.published&&r.published.from||"")).slice(0,4),
-      cover: r.images && r.images.jpg ? (r.images.jpg.large_image_url || r.images.jpg.image_url) : "",
-      overview: r.synopsis || "",
-      creator: (r.authors && r.authors[0] && r.authors[0].name) || (r.studios && r.studios[0] && r.studios[0].name) || "",
-      volumesTotal: r.volumes ? String(r.volumes) : ""
-    }));
+    const isManga = c.jikanType === "manga";
+    try{
+      const r = await anilistSearch(isManga ? "MANGA" : "ANIME", q);
+      if(r.length) return r;
+    }catch(e){ /* on tente la source suivante */ }
+    try{
+      const d = await getJSON(`https://api.jikan.moe/v4/${c.jikanType}?q=${encodeURIComponent(q)}&limit=15&sfw=true`, 2);
+      const r = (d.data||[]).map(m=>({
+        title: m.title_english || m.title,
+        year: String(m.year || (m.aired&&m.aired.from||m.published&&m.published.from||"")).slice(0,4),
+        cover: m.images && m.images.jpg ? (m.images.jpg.large_image_url || m.images.jpg.image_url) : "",
+        overview: m.synopsis || "",
+        creator: (m.authors && m.authors[0] && m.authors[0].name) || (m.studios && m.studios[0] && m.studios[0].name) || "",
+        volumesTotal: m.volumes ? String(m.volumes) : ""
+      }));
+      if(r.length) return r;
+    }catch(e){ /* dernière tentative ci-dessous */ }
+    if(isManga){
+      const d = await getJSON(`https://www.googleapis.com/books/v1/volumes?maxResults=15&country=FR&q=${encodeURIComponent(q)}`);
+      return (d.items||[]).map(r=>{
+        const v = r.volumeInfo||{};
+        return { title:v.title||"", year:(v.publishedDate||"").slice(0,4),
+          cover: v.imageLinks ? (v.imageLinks.thumbnail||"").replace("http://","https://").replace("&edge=curl","") : "",
+          overview:v.description||"", creator:(v.authors||[]).join(", "), publisher:v.publisher||"" };
+      });
+    }
+    throw new Error("les trois sources sont injoignables pour le moment");
   }
   if(c.src==="books"){
     const d = await getJSON(`https://www.googleapis.com/books/v1/volumes?maxResults=15&country=FR&q=${encodeURIComponent(q)}`);
