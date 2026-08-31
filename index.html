@@ -289,7 +289,10 @@ function match(it){
 
 /* ================= rendu bibliothèque ================= */
 function coverHTML(it, cls){
-  if(it.cover) return `<div class="cover ${cls||""}"><img src="${esc(it.cover)}" alt="" loading="lazy" onerror="this.remove()"></div>`;
+  if(it.cover){
+    const fb = it.cover2 ? `this.onerror=null;this.src='${esc(it.cover2)}'` : `this.remove()`;
+    return `<div class="cover ${cls||""}"><img src="${esc(it.cover)}" alt="" loading="lazy" onerror="${fb}"></div>`;
+  }
   return `<div class="cover ${cls||""}"><span class="ph">${esc(it.title)}</span></div>`;
 }
 function flagHTML(it){
@@ -330,6 +333,7 @@ function openItem(id){
     ["Format", it.format],
     ["Édition", it.edition],
     ["Avancement", it.progress],
+    ["Temps de jeu", it.playtime ? it.playtime + " h" : ""],
     ["Note", it.rating ? it.rating+"/10" : ""],
     ["Tomes", isVolumes(it.category) && it.volumes ? it.volumes + (it.volumesTotal? " / "+it.volumesTotal : "") : ""],
     ["Acquis le", it.purchaseDate],
@@ -454,9 +458,12 @@ function openForm(it){
 }
 
 /* ================= APIs ================= */
+const PROXIED = ["api.rawg.io","api.steampowered.com"];
 function px(url){
   const p = (S.settings.proxy||"").trim();
-  return p ? p + encodeURIComponent(url) : url;
+  if(!p) return url;
+  try { if(!PROXIED.includes(new URL(url).hostname)) return url; } catch(e){ return url; }
+  return p + encodeURIComponent(url);
 }
 async function getJSON(url){
   const r = await fetch(px(url));
@@ -612,50 +619,94 @@ async function doBulk(){
 }
 
 /* ---- scan code-barres ---- */
+let scanQueue = [];
 async function startScan(){
+  scanQueue = [];
   if(!("BarcodeDetector" in window)){
-    sheet("Scanner indisponible", `<p class="note">Ton navigateur ne fournit pas le lecteur de codes-barres (c'est le cas de Safari sur iPhone). Sur Android, utilise Chrome.<br><br>En attendant, tape le code EAN/ISBN à la main :</p>
-      <div class="field" style="margin-top:12px"><label for="isbn">Code EAN / ISBN</label><input id="isbn" inputmode="numeric"></div>
-      <button class="btn" id="isbnGo">Chercher</button><div id="isbnOut"></div>`);
-    document.getElementById("isbnGo").onclick = ()=> lookupISBN(document.getElementById("isbn").value.trim());
+    sheet("Scanner indisponible", `<p class="note">Ton navigateur ne fournit pas le lecteur de codes-barres (c'est le cas de Safari sur iPhone). Sur Android, utilise Chrome.<br><br>En attendant, tape les codes à la main, un par ligne :</p>
+      <div class="field" style="margin-top:12px"><label for="isbn">Codes EAN / ISBN</label><textarea id="isbn" rows="4" inputmode="numeric"></textarea></div>
+      <button class="btn" id="isbnGo">Chercher</button><div id="scanList"></div>`);
+    document.getElementById("isbnGo").onclick = async ()=>{
+      const codes = document.getElementById("isbn").value.split(/\s+/).filter(Boolean);
+      for(const c of codes) await queueISBN(c);
+    };
     return;
   }
-  sheet("Scanner", `<video id="cam" playsinline style="width:100%;border-radius:12px;background:#000"></video>
-    <p class="note" style="margin-top:9px">Vise le code-barres au dos du boîtier.</p>`);
+  sheet("Scan en rafale", `<video id="cam" playsinline style="width:100%;max-height:38vh;object-fit:cover;border-radius:12px;background:#000"></video>
+    <p class="note" style="margin-top:9px">Enchaîne les codes-barres, ils s'empilent en dessous. Catégorie : ${esc(CATS[addCat].label)}.</p>
+    <div id="scanList"></div>`);
   let stream;
-  try{
-    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
-  }catch(e){ sheet("Caméra refusée", `<p class="note">Accès caméra refusé. Autorise-le dans les réglages du navigateur, ou saisis le code à la main.</p>`); return; }
+  try{ stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}); }
+  catch(e){ sheet("Caméra refusée", `<p class="note">Accès caméra refusé. Autorise-le dans les réglages du navigateur, ou saisis les codes à la main.</p>`); return; }
   const v = document.getElementById("cam"); v.srcObject = stream; await v.play();
   const det = new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e"]});
   const stop = ()=> stream.getTracks().forEach(t=>t.stop());
-  document.getElementById("sheet").addEventListener("click", e=>{ if(e.target.dataset.close!==undefined) stop(); }, {once:true});
+  const seen = new Set();
+  let busy = false;
   const tick = async ()=>{
     if(!document.getElementById("cam")) return stop();
-    try{
-      const codes = await det.detect(v);
-      if(codes.length){ stop(); lookupISBN(codes[0].rawValue); return; }
-    }catch(e){}
+    if(!busy){
+      try{
+        const codes = await det.detect(v);
+        if(codes.length && !seen.has(codes[0].rawValue)){
+          seen.add(codes[0].rawValue);
+          busy = true;
+          if(navigator.vibrate) navigator.vibrate(60);
+          await queueISBN(codes[0].rawValue);
+          busy = false;
+        }
+      }catch(e){ busy = false; }
+    }
     requestAnimationFrame(tick);
   };
   tick();
 }
-async function lookupISBN(code){
-  if(!code) return;
-  sheet("Recherche", `<p class="note">Code ${esc(code)} — recherche en cours…</p>`);
+async function isbnLookup(code){
   try{
     const d = await getJSON(`https://www.googleapis.com/books/v1/volumes?country=FR&q=isbn:${encodeURIComponent(code)}`);
-    if(!d.items || !d.items.length){
-      sheet("Rien trouvé", `<p class="note">Le code ${esc(code)} n'est pas dans Google Books. C'est fréquent pour les jeux et les DVD, dont les EAN ne sont pas couverts. Crée la fiche à la main.</p>
-        <button class="btn" style="margin-top:12px" id="mk">Saisie manuelle</button>`);
-      document.getElementById("mk").onclick = ()=> openForm({category:addCat});
-      return;
+    if(d.items && d.items.length){
+      const v = d.items[0].volumeInfo || {};
+      return { title:v.title||"", year:(v.publishedDate||"").slice(0,4), creator:(v.authors||[]).join(", "),
+        publisher:v.publisher||"", overview:v.description||"",
+        cover: v.imageLinks ? (v.imageLinks.thumbnail||"").replace("http://","https://").replace("&edge=curl","") : "" };
     }
-    const v = d.items[0].volumeInfo||{};
-    openForm({ category:addCat, title:v.title||"", year:(v.publishedDate||"").slice(0,4),
-      creator:(v.authors||[]).join(", "), publisher:v.publisher||"", overview:v.description||"",
-      cover: v.imageLinks ? (v.imageLinks.thumbnail||"").replace("http://","https://") : "" });
-  }catch(e){ sheet("Échec", `<p class="note">${esc(e.message)}</p>`); }
+  }catch(e){}
+  try{
+    const d = await getJSON(`https://openlibrary.org/api/books?format=json&jscmd=data&bibkeys=ISBN:${encodeURIComponent(code)}`);
+    const b = d["ISBN:"+code];
+    if(b) return { title:b.title||"", year:(b.publish_date||"").slice(-4), creator:(b.authors||[]).map(a=>a.name).join(", "),
+      publisher:(b.publishers||[]).map(p=>p.name).join(", "), overview:"",
+      cover: b.cover ? (b.cover.large || b.cover.medium || "") : "" };
+  }catch(e){}
+  return null;
+}
+async function queueISBN(code){
+  const list = document.getElementById("scanList");
+  if(!list) return;
+  const r = await isbnLookup(code);
+  scanQueue.push(r ? Object.assign({code}, r) : {code, title:"", notFound:true});
+  renderScanList();
+}
+function renderScanList(){
+  const list = document.getElementById("scanList");
+  if(!list) return;
+  const ok = scanQueue.filter(x=>!x.notFound);
+  list.innerHTML = scanQueue.map((x,i)=> x.notFound
+    ? `<div class="res"><span class="noimg"></span><span><span class="res-t">Inconnu</span><span class="res-s">Code ${esc(x.code)} — ni Google Books ni Open Library</span></span></div>`
+    : `<label class="res" style="cursor:pointer"><input type="checkbox" data-s="${i}" checked style="width:18px;flex:0 0 18px;margin-top:20px">
+        ${x.cover?`<img src="${esc(x.cover)}" alt="">`:`<span class="noimg"></span>`}
+        <span><span class="res-t">${esc(x.title)}</span><span class="res-s">${esc([x.creator,x.year,x.publisher].filter(Boolean).join(" · "))}</span></span></label>`).join("")
+    + (ok.length ? `<button class="btn" id="scanAdd" style="margin-top:12px">Ajouter les ${ok.length} titres</button>` : "");
+  const b = document.getElementById("scanAdd");
+  if(b) b.onclick = ()=>{
+    const picked = [...document.querySelectorAll("[data-s]")].filter(c=>c.checked).map(c=>scanQueue[+c.dataset.s]);
+    picked.forEach(x=>{
+      S.items.push({ id:uid(), category:addCat, status:"collection", format:"Physique", edition:"Standard",
+        title:x.title, year:x.year||"", creator:x.creator||"", publisher:x.publisher||"",
+        overview:x.overview||"", cover:x.cover||"", isbn:x.code, tags:[], addedAt:new Date().toISOString() });
+    });
+    scanQueue = []; save(); closeSheet(); renderAll(); toast(picked.length+" fiches ajoutées");
+  };
 }
 
 /* ================= prêts ================= */
@@ -760,6 +811,13 @@ function renderSettings(){
       <div class="row"><button class="btn ghost" id="p-find">Détecter mon serveur</button><button class="btn ghost" id="p-go">Lister les bibliothèques</button></div>
       <div id="plexOut"></div>
     </div>
+    <div class="panel"><h2>Importer depuis Steam</h2>
+      <p class="note">Steam refuse les appels directs depuis un navigateur : renseigne d'abord une URL de proxy plus haut, sinon ça échouera.</p>
+      <div class="field" style="margin-top:11px"><label for="st-key">Clé API Steam</label><input id="st-key" value="${esc(S.settings.steamKey||"")}" placeholder="steamcommunity.com/dev/apikey"></div>
+      <div class="field"><label for="st-id">SteamID64 ou pseudo d'URL</label><input id="st-id" value="${esc(S.settings.steamId||"")}" placeholder="76561198… ou monpseudo"></div>
+      <button class="btn ghost" id="st-go">Importer ma bibliothèque</button>
+      <div id="steamOut"></div>
+    </div>
     <div class="panel"><h2>Importer un CSV</h2>
       <p class="note">Colonnes reconnues : titre, categorie, plateforme, annee, statut, format, avancement, date, prix, note, tomes, auteur, editeur, tags. Seule « titre » est obligatoire. Le séparateur peut être une virgule ou un point-virgule.</p>
       <textarea id="csvTxt" rows="4" style="margin-top:9px" placeholder="titre;categorie;plateforme&#10;Bloodborne;jeu;PS4"></textarea>
@@ -793,6 +851,7 @@ function renderSettings(){
   document.getElementById("csvGo").onclick = importCSV;
   document.getElementById("p-go").onclick = plexSections;
   document.getElementById("p-find").onclick = plexDiscover;
+  document.getElementById("st-go").onclick = steamImport;
   document.getElementById("s-wipe").onclick = ()=>{
     if(!confirm("Effacer les "+S.items.length+" fiches ? Irréversible.")) return;
     S.items = []; save(); renderAll(); toast("Collection vidée");
@@ -835,6 +894,54 @@ function importCSV(){
     S.items.push(rec); n++;
   });
   save(); renderAll(); toast(n+" fiches importées");
+}
+
+/* ================= Steam ================= */
+async function steamImport(){
+  S.settings.steamKey = document.getElementById("st-key").value.trim();
+  S.settings.steamId  = document.getElementById("st-id").value.trim();
+  save();
+  const out = document.getElementById("steamOut");
+  const key = S.settings.steamKey;
+  let sid = S.settings.steamId;
+  if(!key || !sid){ out.innerHTML = `<p class="note" style="margin-top:10px">Il faut la clé et l'identifiant.</p>`; return; }
+  const fail = m => out.innerHTML = `<p class="note" style="margin-top:10px">${esc(m)}<br><br>Si le message parle de réseau ou de CORS, c'est le proxy qui manque ou qui n'autorise pas <code>api.steampowered.com</code>.</p>`;
+  out.innerHTML = `<p class="note" style="margin-top:10px">Connexion à Steam…</p>`;
+  try{
+    if(!/^\d{17}$/.test(sid)){
+      const v = await getJSON(`https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key=${encodeURIComponent(key)}&vanityurl=${encodeURIComponent(sid)}`);
+      if(!v.response || v.response.success !== 1) return fail("Pseudo introuvable. Utilise ton SteamID64 à 17 chiffres.");
+      sid = v.response.steamid;
+      S.settings.steamId = sid; save();
+    }
+    const d = await getJSON(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${encodeURIComponent(key)}&steamid=${encodeURIComponent(sid)}&include_appinfo=1&include_played_free_games=1&format=json`);
+    const games = ((d.response||{}).games)||[];
+    if(!games.length) return fail("Aucun jeu renvoyé. Ton profil et tes détails de jeu doivent être publics dans les réglages de confidentialité Steam.");
+    let added = 0, updated = 0;
+    games.forEach(g=>{
+      const hours = Math.round((g.playtime_forever||0)/60);
+      const progress = hours >= 1 ? "En cours" : "Backlog";
+      const existing = S.items.find(x => x.steamAppId === String(g.appid))
+        || S.items.find(x => x.category==="jeu" && x.platform==="PC" && (x.title||"").toLowerCase() === (g.name||"").toLowerCase());
+      if(existing){
+        existing.steamAppId = String(g.appid);
+        existing.playtime = hours;
+        if(!existing.progress || existing.progress==="Backlog") existing.progress = progress;
+        updated++; return;
+      }
+      S.items.push({
+        id: uid(), category:"jeu", status:"collection", title: g.name || ("App "+g.appid),
+        platform:"PC", format:"Numérique", edition:"Standard", progress,
+        cover:`https://cdn.cloudflare.steamstatic.com/steam/apps/${g.appid}/library_600x900.jpg`,
+        cover2:`https://cdn.cloudflare.steamstatic.com/steam/apps/${g.appid}/header.jpg`,
+        store:"Steam", tags:["steam"], steamAppId:String(g.appid), playtime:hours,
+        addedAt:new Date().toISOString()
+      });
+      added++;
+    });
+    save(); renderAll();
+    toast(`${added} jeux ajoutés, ${updated} mis à jour`);
+  }catch(e){ fail("Échec : " + e.message); }
 }
 
 /* ================= Plex ================= */
