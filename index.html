@@ -174,6 +174,16 @@ nav button.on{color:var(--brass)}
 .loan-item .t span{font-size:12px;color:var(--ink-dim)}
 .late{color:var(--clay)}
 
+.bar{display:flex;gap:6px;margin-top:7px}
+.bar .chip{flex:0 0 auto}
+.bar .chip[aria-pressed="true"]{background:var(--brass);color:#151515;font-weight:600}
+.rows{display:flex;flex-direction:column}
+.row-card{display:flex;gap:11px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);text-align:left}
+.cover.mini{width:36px;flex:0 0 36px;border-radius:5px}
+.rc-t{flex:1;min-width:0}
+.rc-t b{display:block;font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rc-t span{font-size:11.5px;color:var(--ink-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.rc-r{font-size:12px;color:var(--ink-dim);flex:0 0 auto;font-variant-numeric:tabular-nums}
 .instore{margin-bottom:13px;background:var(--surface-2);color:var(--ink);border:1px solid var(--brass)}
 .volgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:5px;margin-bottom:12px}
 .vol{padding:7px 0;border-radius:6px;background:var(--surface-2);border:1px solid var(--line);font-size:12px;color:var(--ink-dim)}
@@ -202,9 +212,14 @@ nav button{font-size:9.5px}
     <span class="h-count" id="viewCount"></span>
   </div>
   <div id="libControls">
-    <input id="q" type="search" placeholder="Chercher un titre, un auteur, une plateforme…" autocomplete="off">
+    <input id="q" type="search" placeholder="Titre, auteur, plateforme, tag…" autocomplete="off">
     <div class="chips" id="catChips" style="margin-top:8px"></div>
-    <div class="chips" id="statChips" style="margin-top:6px"></div>
+    <div class="bar">
+      <button class="chip" id="btnFilters">Filtres</button>
+      <button class="chip" id="btnSort">Tri : titre</button>
+      <button class="chip" id="btnView" aria-label="Changer d'affichage">Grille</button>
+      <button class="chip" id="btnClear" hidden>Effacer</button>
+    </div>
   </div>
 </header>
 
@@ -279,8 +294,21 @@ const isVolumes = c => c==="manga" || c==="comic" || c==="bd";
 const PLATFORMS = ["PS1","PS2","PS3","PS4","PS5","PSP","PS Vita","Xbox","Xbox 360","Xbox One","Xbox Series","NES","SNES","N64","GameCube","Wii","Wii U","Switch","Switch 2","Game Boy","GBA","DS","3DS","PC","Steam Deck","Mega Drive","Dreamcast","Autre"];
 
 /* ================= filtres ================= */
-let F = { cat:"all", stat:"collection", q:"" };
-
+let F = { cat:"all", stat:"collection", q:"", sort:"title", view:"grid",
+  plat:"", format:"", cond:"", region:"", loc:"", tag:"", year:"", ratingMin:"" };
+const SORTS = {
+  title:  ["titre",         (a,b)=>(a.title||"").localeCompare(b.title||"","fr")],
+  recent: ["ajout récent",  (a,b)=>(b.addedAt||"").localeCompare(a.addedAt||"")],
+  bought: ["achat récent",  (a,b)=>(b.purchaseDate||"").localeCompare(a.purchaseDate||"")],
+  year:   ["année",         (a,b)=>String(b.year||"").localeCompare(String(a.year||""))],
+  rating: ["ma note",       (a,b)=>(parseFloat(b.rating)||0)-(parseFloat(a.rating)||0)],
+  value:  ["valeur",        (a,b)=>(typeof b.estValue==="number"?b.estValue:0)-(typeof a.estValue==="number"?a.estValue:0)],
+  time:   ["temps de jeu",  (a,b)=>(parseFloat(b.playtime||b.hours)||0)-(parseFloat(a.playtime||a.hours)||0)]
+};
+function activeFilters(){
+  return ["plat","format","cond","region","loc","tag","year","ratingMin"].filter(k=>F[k]).length
+    + (F.stat!=="collection" ? 1 : 0);
+}
 function match(it){
   if(F.cat!=="all" && it.category!==F.cat) return false;
   if(F.stat==="collection" && it.status!=="collection") return false;
@@ -290,8 +318,17 @@ function match(it){
     const p = it.progress||"";
     if(it.status!=="collection" || !/^(Backlog|À voir|À lire)$/.test(p)) return false;
   }
+  if(F.stat==="incomplete" && !missingVols(it).length) return false;
+  if(F.plat   && it.platform !== F.plat) return false;
+  if(F.format && it.format   !== F.format) return false;
+  if(F.cond   && it.condition!== F.cond) return false;
+  if(F.region && it.region   !== F.region) return false;
+  if(F.loc    && it.location !== F.loc) return false;
+  if(F.tag    && !(it.tags||[]).includes(F.tag)) return false;
+  if(F.year   && String(it.purchaseDate||"").slice(0,4) !== F.year) return false;
+  if(F.ratingMin && (parseFloat(it.rating)||0) < parseFloat(F.ratingMin)) return false;
   if(F.q){
-    const h = [it.title,it.creator,it.platform,it.publisher,(it.tags||[]).join(" "),it.year].join(" ").toLowerCase();
+    const h = [it.title,it.creator,it.platform,it.publisher,it.location,(it.tags||[]).join(" "),it.year].join(" ").toLowerCase();
     if(!h.includes(F.q.toLowerCase())) return false;
   }
   return true;
@@ -312,24 +349,94 @@ function flagHTML(it){
   return "";
 }
 function renderLib(){
-  const list = S.items.filter(match).sort((a,b)=>(a.title||"").localeCompare(b.title||"","fr"));
+  const list = S.items.filter(match).sort(SORTS[F.sort][1]);
+  const n = activeFilters();
   document.getElementById("viewCount").textContent = list.length + (list.length>1?" titres":" titre");
+  document.getElementById("btnFilters").textContent = n ? `Filtres · ${n}` : "Filtres";
+  document.getElementById("btnFilters").setAttribute("aria-pressed", n>0);
+  document.getElementById("btnSort").textContent = "Tri : " + SORTS[F.sort][0];
+  document.getElementById("btnView").textContent = F.view==="grid" ? "Grille" : "Liste";
+  document.getElementById("btnClear").hidden = !(n || F.q);
   const grid = document.getElementById("grid");
   const empty = document.getElementById("libEmpty");
+  grid.className = F.view==="grid" ? "grid" : "rows";
   if(!list.length){
     grid.innerHTML = "";
     empty.innerHTML = S.items.length
-      ? `<div class="empty"><strong>Rien avec ces filtres</strong>Change de catégorie ou vide la recherche.</div>`
+      ? `<div class="empty"><strong>Rien avec ces filtres</strong>Touche « Effacer » pour tout revoir.</div>`
       : `<div class="empty"><strong>Collection vide</strong>Passe par l'onglet Ajouter, ou importe ta liste depuis Réglages.</div>`;
     return;
   }
   empty.innerHTML = "";
-  grid.innerHTML = list.map(it=>`
-    <button class="card" data-id="${it.id}">
-      ${coverHTML(it)}${flagHTML(it)}
-      <h3>${esc(it.title)}</h3>
-      <p class="sub">${esc([it.platform||CATS[it.category]?.label, it.year].filter(Boolean).join(" · "))}</p>
-    </button>`).join("");
+  if(F.view==="grid"){
+    grid.innerHTML = list.map(it=>`
+      <button class="card" data-id="${it.id}">
+        ${coverHTML(it)}${flagHTML(it)}
+        <h3>${esc(it.title)}</h3>
+        <p class="sub">${esc([it.platform||CATS[it.category]?.label, it.year].filter(Boolean).join(" · "))}</p>
+      </button>`).join("");
+  } else {
+    grid.innerHTML = list.map(it=>{
+      const right = F.sort==="value" && typeof it.estValue==="number" ? eur(it.estValue)
+        : F.sort==="rating" && it.rating ? it.rating+"/10"
+        : F.sort==="time" && (it.playtime||it.hours) ? (it.playtime||it.hours)+" h"
+        : F.sort==="bought" && it.purchaseDate ? fmtDate(it.purchaseDate)
+        : it.year || "";
+      return `<button class="card row-card" data-id="${it.id}">
+        ${coverHTML(it,"mini")}
+        <span class="rc-t"><b>${esc(it.title)}</b>
+        <span>${esc([CATS[it.category]?.label, it.platform, it.condition, it.location].filter(Boolean).join(" · "))}</span></span>
+        <span class="rc-r">${esc(right)}</span>
+      </button>`;}).join("");
+  }
+}
+
+function uniq(fn){
+  return [...new Set(S.items.map(fn).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),"fr"));
+}
+function openFilters(){
+  const sel = (id,label,vals,cur)=>`<div class="field"><label for="${id}">${label}</label>
+    <select id="${id}"><option value="">Peu importe</option>${vals.map(v=>`<option${v===cur?" selected":""}>${esc(v)}</option>`).join("")}</select></div>`;
+  const stats = [["collection","Ma collection"],["wishlist","Envies"],["backlog","Pas commencés"],["loaned","Prêtés"],["incomplete","Séries incomplètes"],["all","Tout"]];
+  sheet("Filtres", `
+    <div class="field"><label for="fl-stat">Ce que j'affiche</label>
+      <select id="fl-stat">${stats.map(([k,l])=>`<option value="${k}"${k===F.stat?" selected":""}>${l}</option>`).join("")}</select></div>
+    ${sel("fl-plat","Plateforme",uniq(i=>i.platform),F.plat)}
+    <div class="row">
+      ${sel("fl-format","Format",["Physique","Numérique"],F.format)}
+      ${sel("fl-cond","État",uniq(i=>i.condition),F.cond)}
+    </div>
+    <div class="row">
+      ${sel("fl-region","Région",uniq(i=>i.region),F.region)}
+      ${sel("fl-year","Acheté en",uniq(i=>String(i.purchaseDate||"").slice(0,4)),F.year)}
+    </div>
+    ${sel("fl-loc","Emplacement",uniq(i=>i.location),F.loc)}
+    ${sel("fl-tag","Tag",[...new Set(S.items.flatMap(i=>i.tags||[]))].sort(),F.tag)}
+    ${sel("fl-rating","Note minimum",["5","6","7","8","9","10"],F.ratingMin)}
+    <div class="stack" style="margin-top:14px">
+      <button class="btn" id="fl-ok">Voir les résultats</button>
+      <button class="btn ghost" id="fl-reset">Tout remettre à zéro</button>
+    </div>`);
+  document.getElementById("fl-ok").onclick = ()=>{
+    const g = id => document.getElementById(id).value;
+    F.stat=g("fl-stat"); F.plat=g("fl-plat"); F.format=g("fl-format"); F.cond=g("fl-cond");
+    F.region=g("fl-region"); F.year=g("fl-year"); F.loc=g("fl-loc"); F.tag=g("fl-tag"); F.ratingMin=g("fl-rating");
+    closeSheet(); renderLib();
+  };
+  document.getElementById("fl-reset").onclick = ()=>{ clearFilters(); closeSheet(); };
+}
+function clearFilters(){
+  Object.assign(F, {stat:"collection", plat:"", format:"", cond:"", region:"", loc:"", tag:"", year:"", ratingMin:"", q:""});
+  const q = document.getElementById("q"); if(q) q.value = "";
+  renderLib();
+}
+function openSort(){
+  sheet("Trier par", `<div class="stack">${Object.entries(SORTS).map(([k,v])=>
+    `<button class="btn ${k===F.sort?"":"ghost"}" data-sort="${k}">${v[0]}</button>`).join("")}</div>`);
+  document.getElementById("sheetContent").onclick = e=>{
+    const b = e.target.closest("[data-sort]"); if(!b) return;
+    F.sort = b.dataset.sort; closeSheet(); renderLib();
+  };
 }
 
 /* ================= fiche détail ================= */
@@ -901,39 +1008,74 @@ function renderStats(){
   const backlog = own.filter(i=>/^(Backlog|À voir|À lire)$/.test(i.progress||""));
   const done = own.filter(i=>/^(Terminé|100 %|Vu|Lu|À jour)$/.test(i.progress||""));
   const spent = own.reduce((s,i)=>s+(typeof i.price==="number"?i.price:0),0);
-  const byCat = tally(own, i=>CATS[i.category]?.label||"?");
-  const byPlat = tally(own.filter(i=>i.platform), i=>i.platform);
-  const byYear = tally(own.filter(i=>i.purchaseDate), i=>i.purchaseDate.slice(0,4));
-  const byFmt = tally(own, i=>i.format||"—");
-
   const withEst = own.filter(i=>typeof i.estValue==="number");
   const estTotal = withEst.reduce((s,i)=>s+i.estValue,0);
   const wishCost = wish.filter(i=>typeof i.estValue==="number").reduce((s,i)=>s+i.estValue,0);
   const top = withEst.slice().sort((a,b)=>b.estValue-a.estValue).slice(0,5);
-  const eur = n => n.toFixed(2).replace(".",",") + " €";
+  const pct = own.length ? Math.round(done.length/own.length*100) : 0;
+  const hours = own.reduce((s,i)=>s+(parseFloat(i.playtime)||parseFloat(i.hours)||0),0);
+  const rated = own.filter(i=>parseFloat(i.rating)>0);
+  const avg = rated.length ? (rated.reduce((s,i)=>s+parseFloat(i.rating),0)/rated.length) : 0;
+
+  const byCat = tally(own, i=>CATS[i.category]?.label||"?");
+  const byPlat = tally(own.filter(i=>i.platform), i=>i.platform);
+  const byYear = tally(own.filter(i=>i.purchaseDate), i=>i.purchaseDate.slice(0,4)).sort((a,b)=>a[0].localeCompare(b[0]));
+  const byFmt = tally(own, i=>i.format||"—");
+  const byCond = tally(own.filter(i=>i.condition), i=>i.condition);
+  const byLoc = tally(own.filter(i=>i.location), i=>i.location);
+  const byNote = tally(rated, i=>Math.round(parseFloat(i.rating))+"/10").sort((a,b)=>parseInt(b[0])-parseInt(a[0]));
+
+  // 12 derniers mois
+  const months = [];
+  const now = new Date();
+  for(let k=11;k>=0;k--){
+    const dt = new Date(now.getFullYear(), now.getMonth()-k, 1);
+    const key = dt.toISOString().slice(0,7);
+    months.push([key.slice(5)+"/"+key.slice(2,4), own.filter(i=>String(i.purchaseDate||"").slice(0,7)===key).length]);
+  }
+  const recent = months.some(m=>m[1]>0) ? months : [];
+
+  // prêts
+  const hist = S.items.flatMap(i=>(i.loanHistory||[]).map(x=>x.to));
+  const active = S.items.filter(i=>i.loan).map(i=>i.loan.to);
+  const byWho = tally([...hist, ...active].map(x=>({x})), o=>o.x);
+
+  // séries incomplètes
+  const gaps = own.filter(i=>isVolumes(i.category) && missingVols(i).length)
+    .map(i=>[i.title, missingVols(i).length]).sort((a,b)=>b[1]-a[1]).slice(0,8);
 
   document.getElementById("v-stats").innerHTML = `
     <div class="big">
       <div class="stat"><b>${own.length}</b><span>dans la collection</span></div>
+      <div class="stat"><b>${pct} %</b><span>terminés (${done.length})</span></div>
       <div class="stat"><b>${backlog.length}</b><span>jamais commencés</span></div>
-      <div class="stat"><b>${done.length}</b><span>terminés</span></div>
       <div class="stat"><b>${wish.length}</b><span>en liste d'envies</span></div>
+      ${hours?`<div class="stat"><b>${Math.round(hours)}</b><span>heures de jeu</span></div>`:""}
+      ${avg?`<div class="stat"><b>${avg.toFixed(1).replace(".",",")}</b><span>note moyenne (${rated.length})</span></div>`:""}
     </div>
     <div class="panel"><h2>Valeur de la collection</h2>
       <div class="kv" style="margin:0">
         <dt>Dépensé</dt><dd>${eur(spent)}</dd>
         <dt>Valeur estimée</dt><dd>${eur(estTotal)}</dd>
         <dt>Écart</dt><dd style="color:${estTotal-spent>=0?"var(--teal)":"var(--clay)"}">${estTotal-spent>=0?"+":""}${eur(estTotal-spent)}</dd>
+        ${done.length&&spent?`<dt>Coût par titre fini</dt><dd>${eur(spent/done.length)}</dd>`:""}
         ${wishCost?`<dt>Coût des envies</dt><dd>${eur(wishCost)}</dd>`:""}
       </div>
-      <p class="note" style="margin-top:10px">Calculé sur ${withEst.length} fiche${withEst.length>1?"s":""} valorisée${withEst.length>1?"s":""} sur ${own.length}, et ${own.filter(i=>typeof i.price==="number").length} avec un prix d'achat saisi. Les fiches sans chiffre ne comptent pas : ces totaux sont des planchers, pas la valeur réelle de ta collection.</p>
-      ${top.length?`<div class="bars" style="margin-top:12px">${(()=>{const m=top[0].estValue;return top.map(t=>`<div class="bar-row"><span class="lab">${esc(t.title)}</span><span class="bar"><i style="width:${t.estValue/m*100}%"></i></span><span class="n">${Math.round(t.estValue)}</span></div>`).join("")})()}</div>`:""}
+      <p class="note" style="margin-top:10px">Calculé sur ${withEst.length} fiche${withEst.length>1?"s":""} valorisée${withEst.length>1?"s":""} sur ${own.length}, et ${own.filter(i=>typeof i.price==="number").length} avec un prix d'achat saisi. Les fiches sans chiffre ne comptent pas : ces totaux sont des planchers.</p>
+      ${top.length?`<div class="bars" style="margin-top:12px">${(()=>{const m=top[0].estValue||1;return top.map(t=>`<div class="bar-row"><span class="lab">${esc(t.title)}</span><span class="bar"><i style="width:${t.estValue/m*100}%"></i></span><span class="n">${Math.round(t.estValue)}</span></div>`).join("")})()}</div>`:""}
     </div>
+    ${recent.length?bars("Achats des 12 derniers mois", recent):""}
     ${bars("Par catégorie", byCat)}
     ${byPlat.length?bars("Par plateforme", byPlat):""}
-    ${byYear.length?bars("Achats par année", byYear.sort((a,b)=>a[0].localeCompare(b[0]))):""}
-    ${bars("Physique ou numérique", byFmt)}`;
+    ${byNote.length?bars("Comment tu notes", byNote):""}
+    ${gaps.length?bars("Séries les plus incomplètes (tomes manquants)", gaps):""}
+    ${byCond.length?bars("Par état", byCond):""}
+    ${byLoc.length?bars("Par emplacement", byLoc):""}
+    ${byYear.length?bars("Achats par année", byYear):""}
+    ${bars("Physique ou numérique", byFmt)}
+    ${byWho.length?bars("À qui tu prêtes le plus", byWho):""}`;
 }
+
 function tally(arr, fn){
   const m = new Map();
   arr.forEach(x=>{ const k=fn(x); m.set(k,(m.get(k)||0)+1); });
@@ -1511,19 +1653,14 @@ function go(v){
 document.getElementById("catChips").innerHTML =
   `<button class="chip" data-cat="all" aria-pressed="true">Tout</button>` +
   Object.entries(CATS).map(([k,v])=>`<button class="chip" data-cat="${k}" aria-pressed="false">${v.label}</button>`).join("");
-document.getElementById("statChips").innerHTML =
-  [["collection","Ma collection"],["wishlist","Envies"],["backlog","Pas commencés"],["loaned","Prêtés"],["all","Tout"]]
-  .map(([k,l])=>`<button class="chip" data-stat="${k}" aria-pressed="${k==="collection"}">${l}</button>`).join("");
+document.getElementById("btnFilters").onclick = openFilters;
+document.getElementById("btnSort").onclick = openSort;
+document.getElementById("btnView").onclick = ()=>{ F.view = F.view==="grid" ? "list" : "grid"; renderLib(); };
+document.getElementById("btnClear").onclick = clearFilters;
 document.getElementById("catChips").onclick = e=>{
   const b = e.target.closest("[data-cat]"); if(!b) return;
   F.cat = b.dataset.cat;
   document.querySelectorAll("[data-cat]").forEach(x=>x.setAttribute("aria-pressed", x===b));
-  renderLib();
-};
-document.getElementById("statChips").onclick = e=>{
-  const b = e.target.closest("[data-stat]"); if(!b) return;
-  F.stat = b.dataset.stat;
-  document.querySelectorAll("[data-stat]").forEach(x=>x.setAttribute("aria-pressed", x===b));
   renderLib();
 };
 let qT;
