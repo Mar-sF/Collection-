@@ -1,6 +1,6 @@
 // Proxy pour Ma collection.
 // À coller dans un Worker Cloudflare (dash.cloudflare.com > Workers > Create > Edit code).
-// Il ne relaie que Steam, RAWG et ComicVine, et seulement pour ton site : ce n'est pas un proxy ouvert.
+// Il ne relaie que Steam, RAWG, ComicVine et UPCitemdb, et seulement pour ton site : ce n'est pas un proxy ouvert.
 
 // Les sites autorisés à s'en servir. Mets ici l'adresse exacte de ton app (sans / final).
 const ORIGINES_AUTORISEES = [
@@ -11,7 +11,8 @@ const DOMAINES_AUTORISES = [
   "api.steampowered.com",
   "api.rawg.io",
   "store.steampowered.com",
-  "comicvine.gamespot.com"
+  "comicvine.gamespot.com",
+  "api.upcitemdb.com"
 ];
 
 export default {
